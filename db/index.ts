@@ -130,7 +130,8 @@ async function initializeSchema() {
       created_at INTEGER NOT NULL,
       updated_at INTEGER NOT NULL,
       last_login_at INTEGER,
-      password_changed_at INTEGER NOT NULL
+      password_changed_at INTEGER NOT NULL,
+      deleted_at INTEGER
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS api_keys (
       id TEXT PRIMARY KEY NOT NULL,
@@ -175,6 +176,7 @@ async function initializeSchema() {
       ip_hash TEXT,
       created_at INTEGER NOT NULL
     )`),
+    db.prepare("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS deleted_at INTEGER"),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_single_root ON accounts ((role)) WHERE role = 'root'"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_account_id ON sessions(account_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)"),

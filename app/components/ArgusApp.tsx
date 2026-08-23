@@ -4,7 +4,7 @@ import {
   Activity, ArrowDownRight, ArrowUpRight, BarChart3, Check, ChevronDown,
   CircleDollarSign, Copy, Eye, EyeOff, FileClock, Gauge, KeyRound, Layers3, LoaderCircle,
   LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, RefreshCcw, Search, ShieldCheck,
-  Sparkles, Users, X, Zap,
+  Sparkles, Trash2, Users, X, Zap,
 } from "lucide-react";
 import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -266,17 +266,55 @@ function AdminKeys({ csrfToken, onChanged }: { csrfToken: string; onChanged: () 
 
 function AdminAccounts({ csrfToken, onChanged }: { csrfToken: string; onChanged: () => void }) {
   const [accounts, setAccounts] = useState<Account[]>([]); const [keys, setKeys] = useState<TrackedKey[]>([]); const [assignments, setAssignments] = useState<Assignment[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [createOpen, setCreateOpen] = useState(false); const [manage, setManage] = useState<Account | null>(null);
+  const [createRole, setCreateRole] = useState<"user" | "root">("user"); const [createKeyIds, setCreateKeyIds] = useState<string[]>([]); const [pendingAssignments, setPendingAssignments] = useState<string[]>([]);
+  const [menuAccountId, setMenuAccountId] = useState<string | null>(null); const [deleteAccount, setDeleteAccount] = useState<Account | null>(null); const [deleting, setDeleting] = useState(false);
   const load = useCallback(async () => { setLoading(true); setError(""); try { const [a, k, x] = await Promise.all([requestJson<{ accounts: Account[] }>("/api/admin/accounts"), requestJson<{ keys: TrackedKey[] }>("/api/admin/keys"), requestJson<{ assignments: Assignment[] }>("/api/admin/assignments")]); setAccounts(a.accounts); setKeys(k.keys); setAssignments(x.assignments); } catch (reason) { setError(errorMessage(reason)); } finally { setLoading(false); } }, []);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
-  async function create(values: Record<string, FormDataEntryValue>) { await requestJson("/api/admin/accounts", { method: "POST", body: JSON.stringify(values) }, csrfToken); setCreateOpen(false); await load(); onChanged(); }
+  function openCreate() { setCreateRole("user"); setCreateKeyIds([]); setCreateOpen(true); }
+  async function create(values: Record<string, FormDataEntryValue>) { await requestJson("/api/admin/accounts", { method: "POST", body: JSON.stringify({ ...values, apiKeyIds: createRole === "user" ? createKeyIds : [] }) }, csrfToken); setCreateOpen(false); await load(); onChanged(); }
   async function toggle(account: Account) { try { await requestJson("/api/admin/accounts", { method: "PATCH", body: JSON.stringify({ id: account.id, changes: { status: account.status === "active" ? "disabled" : "active" } }) }, csrfToken); await load(); onChanged(); } catch (reason) { setError(errorMessage(reason)); } }
-  async function assign(keyId: string, assigned: boolean) { if (!manage) return; await requestJson("/api/admin/assignments", { method: "POST", body: JSON.stringify({ accountId: manage.id, apiKeyId: keyId, assigned }) }, csrfToken); await load(); onChanged(); }
-  return <ManagementPage eyebrow="ROOT / ACCESS CONTROL" title="Accounts" description="Create people, control access, and assign one or many tracked keys." action={<button className="button primary" onClick={() => setCreateOpen(true)}><Plus size={17} /> Create account</button>}>
+  async function assign(keyId: string, assigned: boolean) {
+    if (!manage || pendingAssignments.includes(keyId)) return;
+    const accountId = manage.id;
+    setPendingAssignments((current) => [...current, keyId]);
+    setAssignments((current) => assigned
+      ? [...current.filter((item) => !(item.accountId === accountId && item.apiKeyId === keyId)), { accountId, apiKeyId: keyId, assignedAt: Math.floor(Date.now() / 1000) }]
+      : current.filter((item) => !(item.accountId === accountId && item.apiKeyId === keyId)));
+    setAccounts((current) => current.map((account) => account.id === accountId
+      ? { ...account, keyCount: Math.max(0, (account.keyCount ?? 0) + (assigned ? 1 : -1)) }
+      : account));
+    try {
+      await requestJson("/api/admin/assignments", { method: "POST", body: JSON.stringify({ accountId, apiKeyId: keyId, assigned }) }, csrfToken);
+      onChanged();
+    } catch (reason) {
+      setAssignments((current) => assigned
+        ? current.filter((item) => !(item.accountId === accountId && item.apiKeyId === keyId))
+        : [...current, { accountId, apiKeyId: keyId, assignedAt: Math.floor(Date.now() / 1000) }]);
+      setAccounts((current) => current.map((account) => account.id === accountId
+        ? { ...account, keyCount: Math.max(0, (account.keyCount ?? 0) + (assigned ? -1 : 1)) }
+        : account));
+      setError(errorMessage(reason));
+    } finally {
+      setPendingAssignments((current) => current.filter((id) => id !== keyId));
+    }
+  }
+  async function removeAccount() {
+    if (!deleteAccount) return;
+    setDeleting(true); setError("");
+    try {
+      await requestJson("/api/admin/accounts", { method: "DELETE", body: JSON.stringify({ id: deleteAccount.id }) }, csrfToken);
+      setDeleteAccount(null); await load(); onChanged();
+    } catch (reason) { setError(errorMessage(reason)); }
+    finally { setDeleting(false); }
+  }
+  const activeKeys = keys.filter((key) => key.status === "active");
+  return <ManagementPage eyebrow="ROOT / ACCESS CONTROL" title="Accounts" description="Create people, control access, and assign one or many tracked keys." action={<button className="button primary" onClick={openCreate}><Plus size={17} /> Create account</button>}>
     {error && <InlineError text={error} />}
-    <section className="table-panel"><div className="table-toolbar"><div className="search-shell"><Search size={16} /><span>Account directory</span></div><span>{accounts.length} total</span></div><div className="responsive-table"><table><thead><tr><th>Account</th><th>Role</th><th>Keys</th><th>Last sign-in</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{loading ? <TableSkeleton columns={6} /> : accounts.map((account) => <tr key={account.id}><td><div className="person-cell"><span>{initials(account.displayName)}</span><div><strong>{account.displayName}</strong><small>{account.email}</small></div></div></td><td><span className={account.role === "root" ? "role root" : "role"}>{account.role}</span></td><td>{account.role === "root" ? "All" : account.keyCount}</td><td>{account.lastLoginAt ? dateTime.format(account.lastLoginAt * 1000) : "Never"}</td><td><Status status={account.status} /></td><td><div className="row-actions">{account.role !== "root" && <><button className="button ghost small" onClick={() => setManage(account)}>Assign keys</button><button className="icon-button small" aria-label="More account actions" onClick={() => toggle(account)}><MoreHorizontal size={17} /></button></>}</div></td></tr>)}</tbody></table></div></section>
-    {createOpen && <FormModal title="Create an account" submitLabel="Create account" onClose={() => setCreateOpen(false)} onSubmit={create}><label>Display name<input name="displayName" required minLength={2} placeholder="Nishant Verma" /></label><label>Email address<input name="email" type="email" required placeholder="nishant@example.com" /></label><label>Temporary password<input name="password" type="password" minLength={12} required placeholder="12+ characters" /></label><label>Role<select name="role" defaultValue="user"><option value="user">User — assigned keys only</option><option value="root">Root — every tracked key</option></select></label><p className="modal-note"><LockKeyhole size={15} /> Ask the user to change this temporary password after sign-in.</p></FormModal>}
-    {manage && <Modal title={`Assign keys to ${manage.displayName}`} onClose={() => setManage(null)}><p className="modal-subtitle">This account will only see usage for checked keys.</p><div className="assignment-list">{keys.filter((key) => key.status === "active").map((key) => { const checked = assignments.some((item) => item.accountId === manage.id && item.apiKeyId === key.id); return <label key={key.id}><input type="checkbox" checked={checked} onChange={(event) => void assign(key.id, event.target.checked)} /><span className="fake-check">{checked && <Check size={13} />}</span><span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!keys.some((key) => key.status === "active") && <MiniEmpty text="Add a tracked key first." />}</Modal>}
+    <section className="table-panel"><div className="table-toolbar"><div className="search-shell"><Search size={16} /><span>Account directory</span></div><span>{accounts.length} total</span></div><div className="responsive-table"><table><thead><tr><th>Account</th><th>Role</th><th>Keys</th><th>Last sign-in</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{loading ? <TableSkeleton columns={6} /> : accounts.map((account) => <tr key={account.id}><td><div className="person-cell"><span>{initials(account.displayName)}</span><div><strong>{account.displayName}</strong><small>{account.email}</small></div></div></td><td><span className={account.role === "root" ? "role root" : "role"}>{account.role}</span></td><td>{account.role === "root" ? "All" : account.keyCount}</td><td>{account.lastLoginAt ? dateTime.format(account.lastLoginAt * 1000) : "Never"}</td><td><Status status={account.status} /></td><td><div className="row-actions">{account.role !== "root" && <><button className="button ghost small" onClick={() => setManage(account)}>Assign keys</button><div className="account-menu-wrap" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuAccountId(null); }}><button className="icon-button small" aria-label={`Actions for ${account.displayName}`} aria-expanded={menuAccountId === account.id} onClick={() => setMenuAccountId((current) => current === account.id ? null : account.id)}><MoreHorizontal size={17} /></button>{menuAccountId === account.id && <div className="account-menu" role="menu"><button role="menuitem" onClick={() => { setMenuAccountId(null); void toggle(account); }}>{account.status === "active" ? "Disable access" : "Enable access"}</button><button className="danger" role="menuitem" onClick={() => { setMenuAccountId(null); setDeleteAccount(account); }}><Trash2 size={14} /> Delete user</button></div>}</div></>}</div></td></tr>)}</tbody></table></div></section>
+    {createOpen && <FormModal title="Create an account" submitLabel="Create account" onClose={() => setCreateOpen(false)} onSubmit={create}><label>Display name<input name="displayName" required minLength={2} placeholder="Nishant Verma" /></label><label>Email address<input name="email" type="email" required placeholder="nishant@example.com" /></label><label>Temporary password<input name="password" type="password" minLength={12} required placeholder="12+ characters" /></label><label>Role<select name="role" value={createRole} onChange={(event) => setCreateRole(event.target.value as "user" | "root")}><option value="user">User — assigned keys only</option><option value="root">Root — every tracked key</option></select></label>{createRole === "user" && <fieldset className="key-picker"><legend>Assign keys now <span>(optional)</span></legend><p>Select every key this person should be able to track.</p><div className="assignment-list compact">{activeKeys.map((key) => { const checked = createKeyIds.includes(key.id); return <label key={key.id}><input type="checkbox" checked={checked} onChange={(event) => setCreateKeyIds((current) => event.target.checked ? [...current, key.id] : current.filter((id) => id !== key.id))} /><span className="fake-check">{checked && <Check size={13} />}</span><span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!activeKeys.length && <MiniEmpty text="Add a tracked key first." />}</fieldset>}<p className="modal-note"><LockKeyhole size={15} /> Ask the user to change this temporary password after sign-in.</p></FormModal>}
+    {manage && <Modal title={`Assign keys to ${manage.displayName}`} onClose={() => setManage(null)}><p className="modal-subtitle">Changes take effect immediately. This account only sees checked keys.</p><div className="assignment-list">{activeKeys.map((key) => { const checked = assignments.some((item) => item.accountId === manage.id && item.apiKeyId === key.id); const pending = pendingAssignments.includes(key.id); return <label className={pending ? "pending" : ""} key={key.id}><input type="checkbox" checked={checked} disabled={pending} onChange={(event) => void assign(key.id, event.target.checked)} /><span className="fake-check">{pending ? <LoaderCircle className="spin" size={12} /> : checked && <Check size={13} />}</span><span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!activeKeys.length && <MiniEmpty text="Add a tracked key first." />}</Modal>}
+    {deleteAccount && <Modal title="Delete user" onClose={() => { if (!deleting) setDeleteAccount(null); }}><div className="confirm-delete"><span className="danger-icon"><Trash2 size={20} /></span><p>Delete <strong>{deleteAccount.displayName}</strong>?</p><small>{deleteAccount.email}</small><p className="modal-subtitle">They will immediately lose access and all key assignments. Their account details will be anonymized while security audit history is retained.</p></div><div className="modal-actions"><button className="button secondary" disabled={deleting} onClick={() => setDeleteAccount(null)}>Cancel</button><button className="button danger" disabled={deleting} onClick={() => void removeAccount()}>{deleting && <LoaderCircle className="spin" size={16} />} Delete user</button></div></Modal>}
   </ManagementPage>;
 }
 

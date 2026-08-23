@@ -18,7 +18,7 @@ export async function POST(request: Request) {
     const root = await requireRoot(request); await assertCsrf(request, root);
     const parsed = assignKeySchema.safeParse(await request.json());
     if (!parsed.success) throw new ApiError(400, parsed.error.issues[0]?.message ?? "Invalid assignment.", "VALIDATION_ERROR");
-    const account = await getDb().prepare("SELECT id, role FROM accounts WHERE id = ?").bind(parsed.data.accountId).first<{ id: string; role: string }>();
+    const account = await getDb().prepare("SELECT id, role FROM accounts WHERE id = ? AND deleted_at IS NULL").bind(parsed.data.accountId).first<{ id: string; role: string }>();
     const key = await getDb().prepare("SELECT id FROM api_keys WHERE id = ?").bind(parsed.data.apiKeyId).first<{ id: string }>();
     if (!account || !key) throw new ApiError(404, "Account or key not found.", "NOT_FOUND");
     if (account.role === "root") throw new ApiError(400, "Root users already see every tracked key.", "ROOT_ALL_KEYS");

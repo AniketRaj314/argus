@@ -24,6 +24,7 @@ export const createAccountSchema = z.object({
   displayName: z.string().trim().min(2).max(80),
   password,
   role: z.enum(["user", "root"]).default("user"),
+  apiKeyIds: z.array(z.string().min(5).max(128)).max(250).default([]),
 });
 
 export const updateAccountSchema = z.object({

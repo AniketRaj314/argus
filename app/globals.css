@@ -174,6 +174,8 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .button.primary:hover { background: #63f0a0; }
 .button.secondary { color: #b5c8ca; background: #082e39; border-color: var(--line); }
 .button.ghost { color: #87a4a9; background: transparent; border-color: var(--line); }
+.button.danger { color: #ffd7dc; background: rgba(126, 31, 49, .56); border-color: rgba(255, 113, 132, .42); }
+.button.danger:hover { background: rgba(151, 38, 58, .68); }
 .button.small { min-height: 31px; padding: 0 10px; font-size: 9px; }
 
 .management-heading { align-items: center; }
@@ -212,6 +214,12 @@ tbody tr:hover { background: rgba(11, 53, 65, .48); }
 .role { color: #91acb0; text-transform: capitalize; }
 .role.root { color: var(--violet); }
 .row-actions { display: flex; justify-content: flex-end; align-items: center; gap: 5px; }
+.account-menu-wrap { position: relative; }
+.account-menu { position: absolute; z-index: 20; right: 0; top: calc(100% + 5px); width: 150px; padding: 5px; border: 1px solid #1b4b57; border-radius: 10px; background: #062a35; box-shadow: 0 18px 44px rgba(0, 0, 0, .42); display: grid; gap: 2px; }
+.account-menu button { min-height: 34px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; color: #9db5b8; font-size: 10px; text-align: left; display: flex; align-items: center; gap: 7px; }
+.account-menu button:hover { color: white; background: #0a3743; }
+.account-menu button.danger { color: #ff9baa; }
+.account-menu button.danger:hover { background: rgba(116, 27, 45, .36); }
 
 .audit-panel { border: 1px solid var(--line); border-radius: 16px; background: linear-gradient(145deg, #072c38, #052630); overflow: hidden; box-shadow: var(--shadow); }
 .audit-list article { min-height: 67px; display: grid; grid-template-columns: 40px 1fr; align-items: center; gap: 12px; padding: 10px 18px; border-bottom: 1px solid var(--line-soft); }
@@ -247,12 +255,25 @@ tbody tr:hover { background: rgba(11, 53, 65, .48); }
 .form-error { border: 1px solid rgba(255, 113, 132, .3); color: #ffc1c9; background: rgba(92, 20, 35, .28); border-radius: 9px; padding: 10px 12px; font-size: 10px; line-height: 1.5; }
 .assignment-list { display: grid; gap: 7px; }
 .assignment-list label { display: grid; grid-template-columns: 20px 1fr; gap: 10px; align-items: center; background: #04232d; border: 1px solid #103b46; border-radius: 10px; padding: 11px; cursor: pointer; position: relative; }
+.assignment-list label:has(input:checked) { border-color: rgba(62, 232, 135, .34); background: rgba(16, 66, 61, .5); }
+.assignment-list label.pending { opacity: .72; cursor: wait; }
 .assignment-list input { position: absolute; opacity: 0; pointer-events: none; }
 .fake-check { width: 19px; height: 19px; border: 1px solid #2a5963; border-radius: 5px; display: grid; place-items: center; color: #06271d; }
 .assignment-list input:checked + .fake-check { background: var(--mint); border-color: var(--mint); }
 .assignment-list label > span:last-child { display: grid; }
 .assignment-list strong { font-size: 11px; }
 .assignment-list small { margin-top: 3px; color: var(--muted-2); font-family: var(--font-geist-mono); font-size: 9px; }
+.assignment-list.compact { max-height: 220px; overflow-y: auto; padding-right: 3px; }
+.key-picker { min-width: 0; margin: 0; padding: 13px; border: 1px solid #15434f; border-radius: 11px; display: grid; gap: 10px; }
+.key-picker legend { padding: 0 5px; color: #91a9ad; font-size: 10px; font-weight: 680; }
+.key-picker legend span { color: var(--muted-2); font-weight: 500; }
+.key-picker > p { margin: 0; color: #67858c; font-size: 9px; }
+.key-picker .mini-empty { min-height: 90px; }
+.confirm-delete { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 5px 12px 8px; }
+.danger-icon { width: 46px; height: 46px; display: grid; place-items: center; color: var(--danger); background: rgba(116, 27, 45, .3); border: 1px solid rgba(255, 113, 132, .26); border-radius: 13px; }
+.confirm-delete > p { margin: 13px 0 3px; color: #c8d8d9; font-size: 13px; }
+.confirm-delete > small { color: var(--muted-2); }
+.confirm-delete .modal-subtitle { max-width: 360px; margin: 15px 0 0; font-size: 10px; line-height: 1.6; }
 
 .auth-page { min-height: 100vh; display: grid; grid-template-columns: 1.18fr .82fr; background: var(--page-deep); position: relative; overflow: hidden; }
 .auth-page::before { content: ""; position: absolute; inset: 0 42% 0 0; background: radial-gradient(circle, rgba(47, 141, 144, .21) 1px, transparent 1.4px) 0 0 / 48px 48px; opacity: .5; }
