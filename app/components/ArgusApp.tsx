@@ -228,6 +228,15 @@ function Overview({ dashboard, loading, error, keys, keyRollups, range, selected
   const loadingScope = selectedKey === "all" ? "all visible keys" : keys.find((key) => key.id === selectedKey)?.label ?? "selected key";
   const rollups = new Map(keyRollups.map((key) => [key.id, key]));
   for (const key of dashboard?.keys ?? []) rollups.set(key.id, key);
+  const keyColorIndexes = new Map(keys.map((key, index) => [key.id, index]));
+  const watchlistKeys = [...keys].sort((left, right) => {
+    const leftSpend = rollups.get(left.id)?.spend;
+    const rightSpend = rollups.get(right.id)?.spend;
+    if (leftSpend !== undefined && rightSpend !== undefined && leftSpend !== rightSpend) return rightSpend - leftSpend;
+    if (leftSpend !== undefined && rightSpend === undefined) return -1;
+    if (leftSpend === undefined && rightSpend !== undefined) return 1;
+    return left.label.localeCompare(right.label);
+  });
   return <>
     <div className="page-heading">
       <div><p className="eyebrow">ARGUS / OVERVIEW</p><h1>Good {dayPeriod()}, <span>here’s the signal.</span></h1><p>Organization usage, scoped to the keys you’re allowed to see.</p></div>
@@ -244,11 +253,11 @@ function Overview({ dashboard, loading, error, keys, keyRollups, range, selected
       <aside className="left-rail">
         <section className="panel key-scope-panel">
           <PanelTitle icon={<KeyRound size={17} />} title="Key watchlist" action={selectedKey === "all" ? `${dashboard.summary.activeKeys}/${keys.length} active` : <button type="button" className="watch-clear" aria-label="Show all keys" onClick={() => onKey("all")}>All keys</button>} />
-          <div className={selectedKey === "all" ? "key-watch-list" : "key-watch-list has-selection"}>{keys.map((key, index) => {
+          <div className={selectedKey === "all" ? "key-watch-list" : "key-watch-list has-selection"}>{watchlistKeys.map((key) => {
             const selected = selectedKey === key.id;
             const rollup = rollups.get(key.id);
             return <button key={key.id} type="button" aria-pressed={selected} aria-label={selected ? "Show all keys" : `View ${key.label}`} onClick={() => onKey(selected ? "all" : key.id)} className={selected ? "key-watch active" : selectedKey === "all" ? "key-watch" : "key-watch muted"}>
-              <span className="key-sigil" style={{ "--sigil": modelColors[index % modelColors.length] } as React.CSSProperties}>{key.label.slice(0, 1).toUpperCase()}</span>
+              <span className="key-sigil" style={{ "--sigil": modelColors[(keyColorIndexes.get(key.id) ?? 0) % modelColors.length] } as React.CSSProperties}>{key.label.slice(0, 1).toUpperCase()}</span>
               <span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span>
               <span className={rollup ? "key-spend" : "key-spend pending"}>{rollup ? money.format(rollup.spend) : "Select"}</span>
             </button>;

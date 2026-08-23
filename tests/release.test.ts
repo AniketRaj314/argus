@@ -4,7 +4,7 @@ import test from "node:test";
 import packageJson from "../package.json";
 
 test("release version and favicon ship together", async () => {
-  assert.equal(packageJson.version, "1.2.0");
+  assert.equal(packageJson.version, "1.2.1");
   const favicon = await readFile(new URL("../public/favicon.svg", import.meta.url), "utf8");
   assert.match(favicon, /ARGUS watchful eye/);
   assert.match(favicon, /#3EE887/i);
@@ -40,4 +40,8 @@ test("overview key selection stays in the persistent watchlist", async () => {
   assert.match(app, /aria-label="Show all keys"/);
   assert.match(app, /className={selected \? "key-watch active" : selectedKey === "all" \? "key-watch" : "key-watch muted"}/);
   assert.ok(app.includes('onClick={() => onKey(selected ? "all" : key.id)}'));
+  assert.match(app, /return rightSpend - leftSpend/);
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(styles, /\.key-watch-list[^}]*overflow-y:\s*auto/);
+  assert.match(styles, /\.key-scope-panel[^}]*height:\s*clamp/);
 });
