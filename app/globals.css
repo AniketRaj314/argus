@@ -215,7 +215,7 @@ tbody tr:hover { background: rgba(11, 53, 65, .48); }
 .role.root { color: var(--violet); }
 .row-actions { display: flex; justify-content: flex-end; align-items: center; gap: 5px; }
 .account-menu-wrap { position: relative; }
-.account-menu { position: absolute; z-index: 20; right: 0; top: calc(100% + 5px); width: 150px; padding: 5px; border: 1px solid #1b4b57; border-radius: 10px; background: #062a35; box-shadow: 0 18px 44px rgba(0, 0, 0, .42); display: grid; gap: 2px; }
+.account-menu { position: absolute; z-index: 20; right: 0; bottom: calc(100% + 5px); width: 150px; padding: 5px; border: 1px solid #1b4b57; border-radius: 10px; background: #062a35; box-shadow: 0 18px 44px rgba(0, 0, 0, .42); display: grid; gap: 2px; }
 .account-menu button { min-height: 34px; padding: 0 9px; border: 0; border-radius: 7px; background: transparent; color: #9db5b8; font-size: 10px; text-align: left; display: flex; align-items: center; gap: 7px; }
 .account-menu button:hover { color: white; background: #0a3743; }
 .account-menu button.danger { color: #ff9baa; }
