@@ -4,7 +4,7 @@ import test from "node:test";
 import packageJson from "../package.json";
 
 test("release version and favicon ship together", async () => {
-  assert.equal(packageJson.version, "1.1.1");
+  assert.equal(packageJson.version, "1.2.0");
   const favicon = await readFile(new URL("../public/favicon.svg", import.meta.url), "utf8");
   assert.match(favicon, /ARGUS watchful eye/);
   assert.match(favicon, /#3EE887/i);
@@ -31,4 +31,13 @@ test("scrollable surfaces use the ARGUS scrollbar treatment", async () => {
   assert.match(styles, /scrollbar-width:\s*thin/);
   assert.match(styles, /\*::-webkit-scrollbar-thumb\s*\{/);
   assert.match(styles, /scrollbar-color:\s*#1d5662 transparent/i);
+});
+
+test("overview key selection stays in the persistent watchlist", async () => {
+  const app = await readFile(new URL("../app/components/ArgusApp.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(app, /WatchScopePicker|scope-picker/);
+  assert.match(app, /className="watch-clear"/);
+  assert.match(app, /aria-label="Show all keys"/);
+  assert.match(app, /className={selected \? "key-watch active" : selectedKey === "all" \? "key-watch" : "key-watch muted"}/);
+  assert.ok(app.includes('onClick={() => onKey(selected ? "all" : key.id)}'));
 });

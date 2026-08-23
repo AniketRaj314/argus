@@ -7,7 +7,7 @@ import {
   LockKeyhole, LogOut, Menu, MoreHorizontal, Pencil, Plus, RefreshCcw, Search, ShieldCheck,
   Sparkles, Trash2, TriangleAlert, Users, WalletCards, X, Zap,
 } from "lucide-react";
-import { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
+import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip,
   XAxis, YAxis,
@@ -137,6 +137,7 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
   const [range, setRange] = useState<RangeOption>(30);
   const [selectedKey, setSelectedKey] = useState("all");
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
+  const [keyRollupCache, setKeyRollupCache] = useState<{ range: RangeOption | null; keys: Dashboard["keys"] }>({ range: null, keys: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [adminVersion, setAdminVersion] = useState(0);
@@ -153,7 +154,15 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
     try {
       const query = new URLSearchParams({ range: String(range) });
       if (selectedKey !== "all") query.set("key", selectedKey);
-      setDashboard(await requestJson<Dashboard>(`/api/dashboard?${query}`, { signal }));
+      const nextDashboard = await requestJson<Dashboard>(`/api/dashboard?${query}`, { signal });
+      setDashboard(nextDashboard);
+      setKeyRollupCache((current) => {
+        if (selectedKey === "all") return { range, keys: nextDashboard.keys };
+        const cachedKeys = current.range === range ? current.keys : [];
+        const merged = new Map(cachedKeys.map((key) => [key.id, key]));
+        for (const key of nextDashboard.keys) merged.set(key.id, key);
+        return { range, keys: [...merged.values()] };
+      });
     } catch (reason) {
       if (!signal?.aborted) setError(reason instanceof Error ? reason.message : "Usage could not be loaded.");
     } finally { if (!signal?.aborted) setLoading(false); }
@@ -199,7 +208,7 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
       </div>
     </header>
     <main className="content">
-      {tab === "overview" && <Overview dashboard={dashboard} loading={loading} error={error} keys={visibleKeys} range={range} selectedKey={selectedKey} onRange={selectRange} onKey={selectKey} onRetry={refreshDashboard} />}
+      {tab === "overview" && <Overview dashboard={dashboard} loading={loading} error={error} keys={visibleKeys} keyRollups={keyRollupCache.range === range ? keyRollupCache.keys : []} range={range} selectedKey={selectedKey} onRange={selectRange} onKey={selectKey} onRetry={refreshDashboard} />}
       {tab === "keys" && (account.role === "root"
         ? <AdminKeys csrfToken={csrfToken} onChanged={async () => { await refreshBootstrap(); setAdminVersion((value) => value + 1); }} />
         : <MemberKeys keys={dashboard?.keys ?? []} loading={loading} />)}
@@ -210,18 +219,19 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
   </div>;
 }
 
-function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange, onKey, onRetry }: {
-  dashboard: Dashboard | null; loading: boolean; error: string; keys: TrackedKey[]; range: RangeOption; selectedKey: string;
+function Overview({ dashboard, loading, error, keys, keyRollups, range, selectedKey, onRange, onKey, onRetry }: {
+  dashboard: Dashboard | null; loading: boolean; error: string; keys: TrackedKey[]; keyRollups: Dashboard["keys"]; range: RangeOption; selectedKey: string;
   onRange: (range: RangeOption) => void; onKey: (key: string) => void; onRetry: () => void;
 }) {
   const spendChange = dashboard?.summary.previousSpend ? ((dashboard.summary.totalSpend - dashboard.summary.previousSpend) / dashboard.summary.previousSpend) * 100 : null;
   const totalTokens = (dashboard?.summary.inputTokens ?? 0) + (dashboard?.summary.outputTokens ?? 0);
   const loadingScope = selectedKey === "all" ? "all visible keys" : keys.find((key) => key.id === selectedKey)?.label ?? "selected key";
+  const rollups = new Map(keyRollups.map((key) => [key.id, key]));
+  for (const key of dashboard?.keys ?? []) rollups.set(key.id, key);
   return <>
     <div className="page-heading">
       <div><p className="eyebrow">ARGUS / OVERVIEW</p><h1>Good {dayPeriod()}, <span>here’s the signal.</span></h1><p>Organization usage, scoped to the keys you’re allowed to see.</p></div>
       <div className="filter-row">
-        <WatchScopePicker keys={keys} value={selectedKey} loading={loading} onChange={onKey} />
         <div className="range-switch" aria-label="Date range">{([{ value: 7, label: "7D" }, { value: 30, label: "30D" }, { value: "all", label: "ALL" }] as Array<{ value: RangeOption; label: string }>).map((option) => <button key={option.label} onClick={() => onRange(option.value)} className={range === option.value ? "active" : ""}>{option.label}</button>)}</div>
         <button className="icon-button bordered" aria-label="Refresh usage" onClick={onRetry}><RefreshCcw className={loading ? "spin" : ""} size={17} /></button>
       </div>
@@ -233,8 +243,16 @@ function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange
     {loading && !dashboard ? <DashboardSkeleton /> : dashboard?.source === "empty" ? <EmptyOverview /> : dashboard && <div className={loading ? "overview-grid refreshing" : "overview-grid"} aria-busy={loading}>
       <aside className="left-rail">
         <section className="panel key-scope-panel">
-          <PanelTitle icon={<KeyRound size={17} />} title="Key watchlist" action={`${dashboard.summary.activeKeys}/${dashboard.keys.length} active`} />
-          <div className="key-watch-list">{dashboard.keys.map((key, index) => <button key={key.id} onClick={() => onKey(key.id)} className={selectedKey === key.id ? "key-watch active" : "key-watch"}><span className="key-sigil" style={{ "--sigil": modelColors[index % modelColors.length] } as React.CSSProperties}>{key.label.slice(0, 1).toUpperCase()}</span><span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span><span className="key-spend">{money.format(key.spend)}</span></button>)}</div>
+          <PanelTitle icon={<KeyRound size={17} />} title="Key watchlist" action={selectedKey === "all" ? `${dashboard.summary.activeKeys}/${keys.length} active` : <button type="button" className="watch-clear" aria-label="Show all keys" onClick={() => onKey("all")}>All keys</button>} />
+          <div className={selectedKey === "all" ? "key-watch-list" : "key-watch-list has-selection"}>{keys.map((key, index) => {
+            const selected = selectedKey === key.id;
+            const rollup = rollups.get(key.id);
+            return <button key={key.id} type="button" aria-pressed={selected} aria-label={selected ? "Show all keys" : `View ${key.label}`} onClick={() => onKey(selected ? "all" : key.id)} className={selected ? "key-watch active" : selectedKey === "all" ? "key-watch" : "key-watch muted"}>
+              <span className="key-sigil" style={{ "--sigil": modelColors[index % modelColors.length] } as React.CSSProperties}>{key.label.slice(0, 1).toUpperCase()}</span>
+              <span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span>
+              <span className={rollup ? "key-spend" : "key-spend pending"}>{rollup ? money.format(rollup.spend) : "Select"}</span>
+            </button>;
+          })}</div>
           <div className="panel-footer"><span><span className="live-dot" /> Live from OpenAI</span><small>Refreshed {relativeTime(dashboard.generatedAt)}</small></div>
         </section>
         <section className="panel token-mix">
@@ -283,91 +301,6 @@ function BudgetBanner({ budget }: { budget: NonNullable<Dashboard["budget"]> }) 
       <small>Monitoring only. Requests are not blocked</small>
     </div>
   </section>;
-}
-
-function WatchScopePicker({ keys, value, loading, onChange }: {
-  keys: TrackedKey[]; value: string; loading: boolean; onChange: (value: string) => void;
-}) {
-  const [open, setOpen] = useState(false);
-  const pickerRef = useRef<HTMLDivElement>(null);
-  const listboxId = useId();
-  const selected = keys.find((key) => key.id === value);
-
-  useEffect(() => {
-    function closeOnOutsideClick(event: MouseEvent) {
-      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false);
-    }
-    document.addEventListener("mousedown", closeOnOutsideClick);
-    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
-  }, []);
-  useEffect(() => {
-    if (open) pickerRef.current?.querySelector<HTMLButtonElement>("[role='option'][aria-selected='true']")?.focus();
-  }, [open]);
-
-  function choose(nextValue: string) {
-    onChange(nextValue);
-    setOpen(false);
-  }
-
-  function handleKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
-    if (event.key === "Escape") setOpen(false);
-    if (event.key === "ArrowDown" && !open) { event.preventDefault(); setOpen(true); }
-  }
-
-  function navigateOptions(event: ReactKeyboardEvent<HTMLDivElement>) {
-    if (event.key === "Escape") {
-      event.preventDefault(); setOpen(false);
-      pickerRef.current?.querySelector<HTMLButtonElement>(".scope-trigger")?.focus();
-      return;
-    }
-    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
-    event.preventDefault();
-    const options = Array.from(pickerRef.current?.querySelectorAll<HTMLButtonElement>("[role='option']") ?? []);
-    const current = options.indexOf(document.activeElement as HTMLButtonElement);
-    const next = event.key === "ArrowDown" ? (current + 1) % options.length : (current - 1 + options.length) % options.length;
-    options[next]?.focus();
-  }
-
-  return <div className={open ? "scope-picker open" : "scope-picker"} ref={pickerRef}>
-    <button
-      type="button"
-      className="scope-trigger"
-      aria-label="Choose tracked key scope"
-      aria-haspopup="listbox"
-      aria-expanded={open}
-      aria-controls={listboxId}
-      onClick={() => setOpen((current) => !current)}
-      onKeyDown={handleKeyDown}
-    >
-      <span className="scope-trigger-icon">{loading ? <LoaderCircle className="spin" size={16} /> : <KeyRound size={16} />}</span>
-      <span className="scope-trigger-copy">
-        <small>WATCH SCOPE</small>
-        <strong>{selected?.label ?? "All visible keys"}</strong>
-      </span>
-      <span className="scope-trigger-meta">{selected ? maskKey(selected.keyId) : `${keys.length} ${keys.length === 1 ? "key" : "keys"}`}</span>
-      <ChevronDown className="scope-chevron" size={16} />
-    </button>
-    {open && <div className="scope-menu" id={listboxId} role="listbox" aria-label="Tracked key scope" tabIndex={-1} onKeyDown={navigateOptions}>
-      <div className="scope-menu-head">
-        <span><span className="live-dot" /> SIGNAL SOURCE</span>
-        <small>{keys.length} IN VIEW</small>
-      </div>
-      <button type="button" role="option" aria-selected={value === "all"} className={value === "all" ? "scope-option active" : "scope-option"} onClick={() => choose("all")}>
-        <span className="scope-all-icon"><Layers3 size={16} /></span>
-        <span><strong>All visible keys</strong><small>Combined organization signal</small></span>
-        {value === "all" && <span className="scope-check"><Check size={13} /></span>}
-      </button>
-      {keys.length > 0 && <div className="scope-divider"><span>INDIVIDUAL KEYS</span></div>}
-      <div className="scope-options">
-        {keys.map((key, index) => <button type="button" role="option" aria-selected={value === key.id} className={value === key.id ? "scope-option active" : "scope-option"} key={key.id} onClick={() => choose(key.id)}>
-          <span className="key-sigil" style={{ "--sigil": modelColors[index % modelColors.length] } as React.CSSProperties}>{key.label.slice(0, 1).toUpperCase()}</span>
-          <span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span>
-          {value === key.id ? <span className="scope-check"><Check size={13} /></span> : <span className="scope-pulse" />}
-        </button>)}
-      </div>
-      {!keys.length && <div className="scope-menu-empty"><KeyRound size={17} /><span>No tracked keys in view</span></div>}
-    </div>}
-  </div>;
 }
 
 function AdminKeys({ csrfToken, onChanged }: { csrfToken: string; onChanged: () => Promise<void> }) {
@@ -552,7 +485,7 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 }
 
 function MetricCard({ icon, label, value, delta, sub }: { icon: ReactNode; label: string; value: string; delta?: number; sub?: string }) { return <article className="metric-card"><div className="metric-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small className={delta !== undefined ? (delta <= 0 ? "good" : "warn") : ""}>{delta !== undefined ? <>{delta <= 0 ? <ArrowDownRight size={13} /> : <ArrowUpRight size={13} />}{Math.abs(delta).toFixed(1)}%</> : sub}</small></div></article>; }
-function PanelTitle({ icon, title, action }: { icon: ReactNode; title: string; action?: string }) { return <header className="panel-title"><span>{icon}{title}</span>{action && <small>{action}</small>}</header>; }
+function PanelTitle({ icon, title, action }: { icon: ReactNode; title: string; action?: ReactNode }) { return <header className="panel-title"><span>{icon}{title}</span>{typeof action === "string" ? <small>{action}</small> : action}</header>; }
 function Legend({ color, label, value }: { color: string; label: string; value: string }) { return <div><span className="legend-dot" style={{ background: color }} /><span>{label}</span><b>{value}</b></div>; }
 function Status({ status }: { status: string }) { return <span className={`status ${status}`}><span />{status}</span>; }
 function CopyValue({ value }: { value: string }) { const [copied, setCopied] = useState(false); return <button className="copy-value" onClick={async () => { await navigator.clipboard.writeText(value); setCopied(true); setTimeout(() => setCopied(false), 1200); }}><code>{maskKey(value)}</code>{copied ? <Check size={15} /> : <Copy size={15} />}</button>; }
