@@ -4,6 +4,7 @@ import postgres from "postgres";
 type RuntimeEnv = {
   DATABASE_URL?: string;
   OPENAI_ADMIN_KEY?: string;
+  ARGUS_APP_ORIGIN?: string;
   ARGUS_SETUP_TOKEN?: string;
   ARGUS_PASSWORD_PEPPER?: string;
   ARGUS_DEMO_MODE?: string;
@@ -15,6 +16,7 @@ export function getRuntimeEnv(): RuntimeEnv {
   return {
     DATABASE_URL: process.env.DATABASE_URL,
     OPENAI_ADMIN_KEY: process.env.OPENAI_ADMIN_KEY,
+    ARGUS_APP_ORIGIN: process.env.ARGUS_APP_ORIGIN,
     ARGUS_SETUP_TOKEN: process.env.ARGUS_SETUP_TOKEN,
     ARGUS_PASSWORD_PEPPER: process.env.ARGUS_PASSWORD_PEPPER,
     ARGUS_DEMO_MODE: process.env.ARGUS_DEMO_MODE,

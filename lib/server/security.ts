@@ -1,6 +1,7 @@
 import "server-only";
 import { getRuntimeEnv } from "../../db";
 import { sha256 } from "./crypto";
+import { externalRequestOrigin } from "./request-origin";
 
 export class ApiError extends Error {
   constructor(public status: number, message: string, public code = "REQUEST_FAILED") {
@@ -24,7 +25,7 @@ export function assertJsonRequest(request: Request) {
 
 export function assertSameOrigin(request: Request) {
   const origin = request.headers.get("origin");
-  const expected = new URL(request.url).origin;
+  const expected = externalRequestOrigin(request, getRuntimeEnv().ARGUS_APP_ORIGIN);
   if (!origin || origin !== expected) throw new ApiError(403, "Request origin was rejected.", "INVALID_ORIGIN");
   if (request.headers.get("x-argus-request") !== "1") {
     throw new ApiError(403, "Security header is missing.", "CSRF_REJECTED");
@@ -56,7 +57,7 @@ export function parseCookies(request: Request): Record<string, string> {
 }
 
 export function sessionCookie(token: string, request: Request, maxAge = 60 * 60 * 24 * 7): string {
-  const secure = new URL(request.url).protocol === "https:" ? "; Secure" : "";
+  const secure = externalRequestOrigin(request, getRuntimeEnv().ARGUS_APP_ORIGIN).startsWith("https:") ? "; Secure" : "";
   return `argus_session=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secure}`;
 }
 

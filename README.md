@@ -66,6 +66,7 @@ Requirements: Node.js 22.13 or newer.
 | --- | --- | --- |
 | `DATABASE_URL` | Production | Server-only pooled PostgreSQL connection string. |
 | `DATABASE_URL_UNPOOLED` | Migrations | Server-only direct PostgreSQL connection string for migration and administration tools. The running app does not read it. |
+| `ARGUS_APP_ORIGIN` | Production | Canonical browser-facing origin, such as `https://argus.example.com`. Required when deployed behind a reverse proxy. |
 | `OPENAI_ADMIN_KEY` | For live data | Server-only organization Admin key used for Usage and Costs requests. |
 | `ARGUS_SETUP_TOKEN` | First run | One-time value required to create the first root account. |
 | `ARGUS_PASSWORD_PEPPER` | Recommended | Independent server-only value mixed into password hashing. Keep it stable after launch. |
@@ -134,11 +135,11 @@ The application creates missing tables safely on first server request. The check
 
 ### Vercel
 
-Import the Git repository as a Next.js project and add `DATABASE_URL`, `OPENAI_ADMIN_KEY`, `ARGUS_SETUP_TOKEN`, `ARGUS_PASSWORD_PEPPER`, and `ARGUS_DEMO_MODE=false` under project environment variables. Deploy, visit the production URL, and complete the one-time root setup. Keep Preview and Production on separate databases or Neon branches when preview deployments are enabled.
+Import the Git repository as a Next.js project and add `DATABASE_URL`, `ARGUS_APP_ORIGIN`, `OPENAI_ADMIN_KEY`, `ARGUS_SETUP_TOKEN`, `ARGUS_PASSWORD_PEPPER`, and `ARGUS_DEMO_MODE=false` under project environment variables. Deploy, visit the production URL, and complete the one-time root setup. Keep Preview and Production on separate databases or Neon branches when preview deployments are enabled.
 
 ### Railway
 
-Create a service from the Git repository. Railway detects Next.js and uses `npm run build` plus `npm start`. Add the same server-only variables to the service, generate a public domain, then complete root setup at that HTTPS URL. A Railway PostgreSQL service is also compatible if `DATABASE_URL` points to it.
+Create a service from the Git repository. Railway detects Next.js and uses `npm run build` plus `npm start`. Add the same server-only variables to the service, set `ARGUS_APP_ORIGIN` to the final HTTPS domain, generate a public domain, then complete root setup at that URL. A Railway PostgreSQL service is also compatible if `DATABASE_URL` points to it.
 
 ## Validation
 
