@@ -74,7 +74,7 @@ export function ArgusApp() {
 }
 
 function FullScreenLoader() {
-  return <main className="boot-screen"><div className="boot-mark"><ArgusMark /><LoaderCircle className="spin" size={20} /></div><p>Bringing the watchtower online…</p></main>;
+  return <main className="boot-screen"><div className="boot-mark"><ArgusMark /><LoaderCircle className="spin" size={20} /></div><p>Bringing ARGUS online…</p></main>;
 }
 
 function FatalState({ message, onRetry }: { message: string; onRetry: () => void }) {
@@ -213,7 +213,7 @@ function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange
   const loadingScope = selectedKey === "all" ? "all visible keys" : keys.find((key) => key.id === selectedKey)?.label ?? "selected key";
   return <>
     <div className="page-heading">
-      <div><p className="eyebrow">WATCHTOWER / OVERVIEW</p><h1>Good {dayPeriod()}, <span>here’s the signal.</span></h1><p>Organization usage, scoped to the keys you’re allowed to see.</p></div>
+      <div><p className="eyebrow">ARGUS / OVERVIEW</p><h1>Good {dayPeriod()}, <span>here’s the signal.</span></h1><p>Organization usage, scoped to the keys you’re allowed to see.</p></div>
       <div className="filter-row">
         <WatchScopePicker keys={keys} value={selectedKey} loading={loading} onChange={onKey} />
         <div className="range-switch" aria-label="Date range">{([{ value: 7, label: "7D" }, { value: 30, label: "30D" }, { value: "all", label: "ALL" }] as Array<{ value: RangeOption; label: string }>).map((option) => <button key={option.label} onClick={() => onRange(option.value)} className={range === option.value ? "active" : ""}>{option.label}</button>)}</div>

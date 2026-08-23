@@ -30,7 +30,7 @@ export default async function HealthPage() {
         <span className={healthy ? styles.statusIcon : `${styles.statusIcon} ${styles.degraded}`}><i /></span>
         <p>SYSTEM STATUS</p>
         <h1>{healthy ? "All eyes operational." : "ARGUS has a blind spot."}</h1>
-        <span>{healthy ? "The watchtower and its database are responding normally." : "The application is responding, but a dependency needs attention."}</span>
+        <span>{healthy ? "ARGUS and its database are responding normally." : "The application is responding, but a dependency needs attention."}</span>
       </div>
 
       <div className={styles.checks}>

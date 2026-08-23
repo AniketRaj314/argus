@@ -57,7 +57,7 @@ test("server-renders the finished ARGUS application shell with security headers"
   assert.doesNotMatch(policy.match(/script-src[^;]+/)?.[0] ?? "", /'unsafe-inline'/);
   const html = await firstResponse.text();
   assert.match(html, /<title>ARGUS — API usage intelligence<\/title>/i);
-  assert.match(html, /Bringing the watchtower online/i);
+  assert.match(html, /Bringing ARGUS online/i);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
