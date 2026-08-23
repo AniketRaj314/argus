@@ -14,12 +14,15 @@ export const accounts = pgTable(
     updatedAt: integer("updated_at").notNull(),
     lastLoginAt: integer("last_login_at"),
     passwordChangedAt: integer("password_changed_at").notNull(),
+    monthlyBudgetCents: integer("monthly_budget_cents"),
+    deletedAt: integer("deleted_at"),
   },
   (table) => [
     uniqueIndex("idx_accounts_email").on(table.email),
     uniqueIndex("idx_single_root").on(table.role).where(sql`${table.role} = 'root'`),
     check("accounts_role_check", sql`${table.role} IN ('root', 'user')`),
     check("accounts_status_check", sql`${table.status} IN ('active', 'disabled')`),
+    check("accounts_monthly_budget_check", sql`${table.monthlyBudgetCents} IS NULL OR ${table.monthlyBudgetCents} >= 100`),
   ],
 );
 

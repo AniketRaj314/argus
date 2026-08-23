@@ -1,6 +1,7 @@
 import { getVisibleKeys, requireSession } from "../../../lib/server/auth";
 import { getDashboardData } from "../../../lib/server/openai-usage";
 import { ApiError, jsonError, noStoreHeaders } from "../../../lib/server/security";
+import { getBudgetSnapshot } from "../../../lib/server/budget";
 
 export async function GET(request: Request) {
   try {
@@ -13,8 +14,11 @@ export async function GET(request: Request) {
     const selectedId = url.searchParams.get("key");
     const selectedKeys = selectedId ? visibleKeys.filter((key) => key.id === selectedId) : visibleKeys;
     if (selectedId && selectedKeys.length === 0) throw new ApiError(403, "That key is not assigned to this account.", "FORBIDDEN");
-    const dashboard = await getDashboardData(selectedKeys, range);
-    return Response.json(dashboard, { headers: noStoreHeaders() });
+    const [dashboard, budget] = await Promise.all([
+      getDashboardData(selectedKeys, range),
+      session.account.role === "user" ? getBudgetSnapshot(session.account.monthlyBudgetCents, visibleKeys) : Promise.resolve(null),
+    ]);
+    return Response.json({ ...dashboard, budget }, { headers: noStoreHeaders() });
   } catch (error) {
     return jsonError(error);
   }

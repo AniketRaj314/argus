@@ -89,6 +89,33 @@ function periodStart(timestamp: number, granularity: DashboardData["granularity"
   return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), 1) / 1000;
 }
 
+export async function getSpendByKey(keys: TrackedKey[], start: number, end: number): Promise<Map<string, number>> {
+  const spend = new Map(keys.map((key) => [key.keyId, 0]));
+  if (!keys.length) return spend;
+  if (getRuntimeEnv().ARGUS_DEMO_MODE === "true") {
+    const days = Math.max(1, Math.ceil((end - start) / 86_400));
+    const denominator = keys.length * (keys.length + 1) / 2;
+    keys.forEach((key, index) => spend.set(key.keyId, days * 9.4 * ((keys.length - index) / denominator)));
+    return spend;
+  }
+  const adminKey = getRuntimeEnv().OPENAI_ADMIN_KEY;
+  if (!adminKey) throw new ApiError(503, "OpenAI data is not connected yet.", "OPENAI_NOT_CONFIGURED");
+  const params = new URLSearchParams({
+    start_time: String(start), end_time: String(end), bucket_width: "1d",
+    limit: String(Math.min(Math.max(1, Math.ceil((end - start) / 86_400)) + 1, 180)),
+  });
+  appendList(params, "api_key_ids", keys.map((key) => key.keyId));
+  params.append("group_by", "api_key_id");
+  const buckets = await fetchAll("costs", params, adminKey);
+  for (const result of buckets.flatMap((bucket) => bucket.results)) {
+    if (!result.api_key_id || !spend.has(result.api_key_id)) continue;
+    const amount = typeof result.amount === "object" && result.amount && typeof (result.amount as { value?: unknown }).value === "number"
+      ? (result.amount as { value: number }).value : 0;
+    spend.set(result.api_key_id, (spend.get(result.api_key_id) ?? 0) + amount);
+  }
+  return spend;
+}
+
 export async function getDashboardData(keys: TrackedKey[], range: DashboardRange): Promise<DashboardData> {
   if (keys.length === 0) return emptyDashboard(range);
   if (getRuntimeEnv().ARGUS_DEMO_MODE === "true") return demoDashboard(keys, range);

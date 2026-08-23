@@ -3,8 +3,8 @@
 import {
   Activity, ArrowDownRight, ArrowUpRight, BarChart3, Check, ChevronDown,
   CircleDollarSign, Copy, Eye, EyeOff, FileClock, Gauge, KeyRound, Layers3, LoaderCircle,
-  LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, RefreshCcw, Search, ShieldCheck,
-  Sparkles, Trash2, Users, X, Zap,
+  LockKeyhole, LogOut, Menu, MoreHorizontal, Pencil, Plus, RefreshCcw, Search, ShieldCheck,
+  Sparkles, Trash2, TriangleAlert, Users, WalletCards, X, Zap,
 } from "lucide-react";
 import { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import {
@@ -16,6 +16,8 @@ import { ArgusMark } from "./ArgusLogo";
 type Account = {
   id: string; email: string; displayName: string; role: "root" | "user";
   status: "active" | "disabled"; createdAt: number; lastLoginAt: number | null; keyCount?: number;
+  monthlyBudgetCents?: number | null; budgetLimitCents?: number | null; budgetSpentCents?: number | null;
+  budgetPeriodStart?: number; budgetPeriodEnd?: number; sharedKeyCount?: number;
 };
 type TrackedKey = { id: string; keyId: string; label: string; projectId: string | null; status?: "active" | "archived"; assignedNames?: string[]; assignmentCount?: number; createdAt?: number };
 type Bootstrap = { configured: boolean; authenticated: boolean; csrfToken?: string; account?: Account; keys?: TrackedKey[] };
@@ -29,6 +31,7 @@ type Dashboard = {
   services: Array<{ name: string; requests: number }>;
   recent: Array<{ id: string; timestamp: number; keyLabel: string; model: string; tokens: number; requests: number; spend: number }>;
   notices: string[];
+  budget: { limitCents: number; spentCents: number | null; remainingCents: number | null; percentUsed: number | null; periodStart: number; periodEnd: number; status: "healthy" | "warning" | "exceeded" | "unavailable" } | null;
 };
 type AuditEvent = { id: string; action: string; targetType: string; targetId: string | null; metadata: Record<string, unknown>; createdAt: number; actorName: string; actorEmail: string | null };
 type Assignment = { accountId: string; apiKeyId: string; assignedAt: number };
@@ -220,6 +223,7 @@ function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange
     {loading && dashboard && <div className="data-loading" role="status"><LoaderCircle className="spin" size={16} /><span>Loading usage for <strong>{loadingScope}</strong>…</span></div>}
     {error ? <section className="error-card"><Activity /><div><strong>Usage feed unavailable</strong><p>{error}</p></div><button className="button secondary" onClick={onRetry}>Retry</button></section> : null}
     {dashboard?.notices.map((notice) => <div className="notice" key={notice}><Sparkles size={15} />{notice}</div>)}
+    {dashboard?.budget && <BudgetBanner budget={dashboard.budget} />}
     {loading && !dashboard ? <DashboardSkeleton /> : dashboard?.source === "empty" ? <EmptyOverview /> : dashboard && <div className={loading ? "overview-grid refreshing" : "overview-grid"} aria-busy={loading}>
       <aside className="left-rail">
         <section className="panel key-scope-panel">
@@ -253,6 +257,27 @@ function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange
       </aside>
     </div>}
   </>;
+}
+
+function BudgetBanner({ budget }: { budget: NonNullable<Dashboard["budget"]> }) {
+  const percentUsed = Math.min(100, Math.max(0, budget.percentUsed ?? 0));
+  const resetDate = dateOnly.format(budget.periodEnd * 1000);
+  return <section className={`budget-banner ${budget.status}`} aria-label="Monthly credit limit">
+    <div className="budget-mark"><WalletCards size={19} /></div>
+    <div className="budget-copy">
+      <p className="eyebrow">MONTHLY CREDIT GUARDRAIL</p>
+      <div><strong>{budget.spentCents === null ? "Usage unavailable" : `${cents(budget.spentCents)} of ${cents(budget.limitCents)} used`}</strong><span>Across all assigned keys · resets {resetDate} UTC</span></div>
+    </div>
+    <div className="budget-meter-wrap">
+      <div className="budget-meter"><span style={{ width: `${percentUsed}%` }} /></div>
+      <small>{budget.percentUsed === null ? "—" : `${Math.round(budget.percentUsed)}%`}</small>
+    </div>
+    <div className="budget-remaining">
+      {budget.status === "exceeded" && <TriangleAlert size={15} />}
+      <span>{budget.remainingCents === null ? "Could not load spend" : budget.status === "exceeded" ? `${cents(budget.spentCents! - budget.limitCents)} over limit` : `${cents(budget.remainingCents)} remaining`}</span>
+      <small>Monitoring only—requests are not blocked</small>
+    </div>
+  </section>;
 }
 
 function WatchScopePicker({ keys, value, loading, onChange }: {
@@ -369,12 +394,46 @@ function AdminKeys({ csrfToken, onChanged }: { csrfToken: string; onChanged: () 
 function AdminAccounts({ csrfToken, onChanged }: { csrfToken: string; onChanged: () => void }) {
   const [accounts, setAccounts] = useState<Account[]>([]); const [keys, setKeys] = useState<TrackedKey[]>([]); const [assignments, setAssignments] = useState<Assignment[]>([]); const [loading, setLoading] = useState(true); const [error, setError] = useState(""); const [createOpen, setCreateOpen] = useState(false); const [manage, setManage] = useState<Account | null>(null);
   const [createRole, setCreateRole] = useState<"user" | "root">("user"); const [createKeyIds, setCreateKeyIds] = useState<string[]>([]); const [pendingAssignments, setPendingAssignments] = useState<string[]>([]);
+  const [createBudgetEnabled, setCreateBudgetEnabled] = useState(false); const [createBudgetDollars, setCreateBudgetDollars] = useState("50");
+  const [editAccount, setEditAccount] = useState<Account | null>(null); const [editBudgetEnabled, setEditBudgetEnabled] = useState(false); const [editBudgetDollars, setEditBudgetDollars] = useState("");
   const [menuAccountId, setMenuAccountId] = useState<string | null>(null); const [deleteAccount, setDeleteAccount] = useState<Account | null>(null); const [deleting, setDeleting] = useState(false);
-  const load = useCallback(async () => { setLoading(true); setError(""); try { const [a, k, x] = await Promise.all([requestJson<{ accounts: Account[] }>("/api/admin/accounts"), requestJson<{ keys: TrackedKey[] }>("/api/admin/keys"), requestJson<{ assignments: Assignment[] }>("/api/admin/assignments")]); setAccounts(a.accounts); setKeys(k.keys); setAssignments(x.assignments); } catch (reason) { setError(errorMessage(reason)); } finally { setLoading(false); } }, []);
+  const [budgetLoading, setBudgetLoading] = useState(false);
+  const loadBudgets = useCallback(async () => {
+    setBudgetLoading(true);
+    try {
+      const data = await requestJson<{ periodStart: number; periodEnd: number; accounts: Array<{ id: string; spentCents: number }> }>("/api/admin/accounts/budgets");
+      setAccounts((current) => current.map((account) => {
+        const usage = data.accounts.find((item) => item.id === account.id);
+        return usage ? { ...account, budgetSpentCents: usage.spentCents, budgetPeriodStart: data.periodStart, budgetPeriodEnd: data.periodEnd } : account;
+      }));
+    } catch { /* Account management remains available when OpenAI costs are temporarily unavailable. */ }
+    finally { setBudgetLoading(false); }
+  }, []);
+  const load = useCallback(async () => { setLoading(true); setError(""); try { const [a, k, x] = await Promise.all([requestJson<{ accounts: Account[] }>("/api/admin/accounts"), requestJson<{ keys: TrackedKey[] }>("/api/admin/keys"), requestJson<{ assignments: Assignment[] }>("/api/admin/assignments")]); setAccounts(a.accounts); setKeys(k.keys); setAssignments(x.assignments); void loadBudgets(); } catch (reason) { setError(errorMessage(reason)); } finally { setLoading(false); } }, [loadBudgets]);
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { void load(); }, [load]);
-  function openCreate() { setCreateRole("user"); setCreateKeyIds([]); setCreateOpen(true); }
-  async function create(values: Record<string, FormDataEntryValue>) { await requestJson("/api/admin/accounts", { method: "POST", body: JSON.stringify({ ...values, apiKeyIds: createRole === "user" ? createKeyIds : [] }) }, csrfToken); setCreateOpen(false); await load(); onChanged(); }
+  function openCreate() { setCreateRole("user"); setCreateKeyIds([]); setCreateBudgetEnabled(false); setCreateBudgetDollars("50"); setCreateOpen(true); }
+  function openEdit(account: Account) { setEditBudgetEnabled(account.budgetLimitCents !== null); setEditBudgetDollars(account.budgetLimitCents ? (account.budgetLimitCents / 100).toFixed(2) : "50"); setEditAccount(account); }
+  async function create(values: Record<string, FormDataEntryValue>) {
+    const accountValues = { ...values };
+    delete accountValues.monthlyBudgetUsd;
+    await requestJson("/api/admin/accounts", { method: "POST", body: JSON.stringify({
+      ...accountValues, apiKeyIds: createRole === "user" ? createKeyIds : [],
+      monthlyBudgetCents: createRole === "user" && createBudgetEnabled ? dollarsToCents(createBudgetDollars) : null,
+    }) }, csrfToken);
+    setCreateOpen(false); await load(); onChanged();
+  }
+  async function update(values: Record<string, FormDataEntryValue>) {
+    if (!editAccount) return;
+    const password = String(values.password ?? "").trim();
+    const changes: Record<string, unknown> = {
+      displayName: String(values.displayName), email: String(values.email), status: String(values.status),
+      monthlyBudgetCents: editBudgetEnabled ? dollarsToCents(editBudgetDollars) : null,
+    };
+    if (password) changes.password = password;
+    await requestJson("/api/admin/accounts", { method: "PATCH", body: JSON.stringify({ id: editAccount.id, changes }) }, csrfToken);
+    setEditAccount(null); await load(); onChanged();
+  }
   async function toggle(account: Account) { try { await requestJson("/api/admin/accounts", { method: "PATCH", body: JSON.stringify({ id: account.id, changes: { status: account.status === "active" ? "disabled" : "active" } }) }, csrfToken); await load(); onChanged(); } catch (reason) { setError(errorMessage(reason)); } }
   async function assign(keyId: string, assigned: boolean) {
     if (!manage || pendingAssignments.includes(keyId)) return;
@@ -388,7 +447,7 @@ function AdminAccounts({ csrfToken, onChanged }: { csrfToken: string; onChanged:
       : account));
     try {
       await requestJson("/api/admin/assignments", { method: "POST", body: JSON.stringify({ accountId, apiKeyId: keyId, assigned }) }, csrfToken);
-      onChanged();
+      await load(); onChanged();
     } catch (reason) {
       setAssignments((current) => assigned
         ? current.filter((item) => !(item.accountId === accountId && item.apiKeyId === keyId))
@@ -411,13 +470,32 @@ function AdminAccounts({ csrfToken, onChanged }: { csrfToken: string; onChanged:
     finally { setDeleting(false); }
   }
   const activeKeys = keys.filter((key) => key.status === "active");
-  return <ManagementPage eyebrow="ROOT / ACCESS CONTROL" title="Accounts" description="Create people, control access, and assign one or many tracked keys." action={<button className="button primary" onClick={openCreate}><Plus size={17} /> Create account</button>}>
+  return <ManagementPage eyebrow="ROOT / ACCESS CONTROL" title="Accounts" description="Create people, assign keys, and monitor monthly credit guardrails from one control plane." action={<button className="button primary" onClick={openCreate}><Plus size={17} /> Create account</button>}>
     {error && <InlineError text={error} />}
-    <section className="table-panel"><div className="table-toolbar"><div className="search-shell"><Search size={16} /><span>Account directory</span></div><span>{accounts.length} total</span></div><div className="responsive-table"><table><thead><tr><th>Account</th><th>Role</th><th>Keys</th><th>Last sign-in</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{loading ? <TableSkeleton columns={6} /> : accounts.map((account) => <tr key={account.id}><td><div className="person-cell"><span>{initials(account.displayName)}</span><div><strong>{account.displayName}</strong><small>{account.email}</small></div></div></td><td><span className={account.role === "root" ? "role root" : "role"}>{account.role}</span></td><td>{account.role === "root" ? "All" : account.keyCount}</td><td>{account.lastLoginAt ? dateTime.format(account.lastLoginAt * 1000) : "Never"}</td><td><Status status={account.status} /></td><td><div className="row-actions">{account.role !== "root" && <><button className="button ghost small" onClick={() => setManage(account)}>Assign keys</button><div className="account-menu-wrap" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuAccountId(null); }}><button className="icon-button small" aria-label={`Actions for ${account.displayName}`} aria-expanded={menuAccountId === account.id} onClick={() => setMenuAccountId((current) => current === account.id ? null : account.id)}><MoreHorizontal size={17} /></button>{menuAccountId === account.id && <div className="account-menu" role="menu"><button role="menuitem" onClick={() => { setMenuAccountId(null); void toggle(account); }}>{account.status === "active" ? "Disable access" : "Enable access"}</button><button className="danger" role="menuitem" onClick={() => { setMenuAccountId(null); setDeleteAccount(account); }}><Trash2 size={14} /> Delete user</button></div>}</div></>}</div></td></tr>)}</tbody></table></div></section>
-    {createOpen && <FormModal title="Create an account" submitLabel="Create account" onClose={() => setCreateOpen(false)} onSubmit={create}><label>Display name<input name="displayName" required minLength={2} placeholder="Nishant Verma" /></label><label>Email address<input name="email" type="email" required placeholder="nishant@example.com" /></label><label>Temporary password<input name="password" type="password" minLength={12} required placeholder="12+ characters" /></label><label>Role<select name="role" value={createRole} onChange={(event) => setCreateRole(event.target.value as "user" | "root")}><option value="user">User — assigned keys only</option><option value="root">Root — every tracked key</option></select></label>{createRole === "user" && <fieldset className="key-picker"><legend>Assign keys now <span>(optional)</span></legend><p>Select every key this person should be able to track.</p><div className="assignment-list compact">{activeKeys.map((key) => { const checked = createKeyIds.includes(key.id); return <label key={key.id}><input type="checkbox" checked={checked} onChange={(event) => setCreateKeyIds((current) => event.target.checked ? [...current, key.id] : current.filter((id) => id !== key.id))} /><span className="fake-check">{checked && <Check size={13} />}</span><span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!activeKeys.length && <MiniEmpty text="Add a tracked key first." />}</fieldset>}<p className="modal-note"><LockKeyhole size={15} /> Ask the user to change this temporary password after sign-in.</p></FormModal>}
-    {manage && <Modal title={`Assign keys to ${manage.displayName}`} onClose={() => setManage(null)}><p className="modal-subtitle">Changes take effect immediately. This account only sees checked keys.</p><div className="assignment-list">{activeKeys.map((key) => { const checked = assignments.some((item) => item.accountId === manage.id && item.apiKeyId === key.id); const pending = pendingAssignments.includes(key.id); return <label className={pending ? "pending" : ""} key={key.id}><input type="checkbox" checked={checked} disabled={pending} onChange={(event) => void assign(key.id, event.target.checked)} /><span className="fake-check">{pending ? <LoaderCircle className="spin" size={12} /> : checked && <Check size={13} />}</span><span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!activeKeys.length && <MiniEmpty text="Add a tracked key first." />}</Modal>}
+    <section className="table-panel"><div className="table-toolbar"><div className="search-shell"><Search size={16} /><span>Account directory</span></div><span>{budgetLoading && <LoaderCircle className="spin" size={12} />} {accounts.length} total</span></div><div className="responsive-table"><table className="accounts-table"><thead><tr><th>Account</th><th>Role</th><th>Keys</th><th>Monthly limit</th><th>Last sign-in</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{loading ? <TableSkeleton columns={7} /> : accounts.map((account) => <tr key={account.id}><td><div className="person-cell"><span>{initials(account.displayName)}</span><div><strong>{account.displayName}</strong><small>{account.email}</small></div></div></td><td><span className={account.role === "root" ? "role root" : "role"}>{account.role}</span></td><td>{account.role === "root" ? "All" : <span>{account.keyCount}{account.sharedKeyCount ? <small className="shared-count">{account.sharedKeyCount} shared</small> : null}</span>}</td><td>{account.role === "root" ? <span className="budget-none">Global view</span> : <AccountBudget account={account} loading={budgetLoading} />}</td><td>{account.lastLoginAt ? dateTime.format(account.lastLoginAt * 1000) : "Never"}</td><td><Status status={account.status} /></td><td><div className="row-actions">{account.role !== "root" && <><button className="button ghost small" onClick={() => setManage(account)}>Assign keys</button><div className="account-menu-wrap" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuAccountId(null); }}><button className="icon-button small" aria-label={`Actions for ${account.displayName}`} aria-expanded={menuAccountId === account.id} onClick={() => setMenuAccountId((current) => current === account.id ? null : account.id)}><MoreHorizontal size={17} /></button>{menuAccountId === account.id && <div className="account-menu" role="menu"><button role="menuitem" onClick={() => { setMenuAccountId(null); openEdit(account); }}><Pencil size={14} /> Edit account</button><button role="menuitem" onClick={() => { setMenuAccountId(null); void toggle(account); }}>{account.status === "active" ? "Disable access" : "Enable access"}</button><button className="danger" role="menuitem" onClick={() => { setMenuAccountId(null); setDeleteAccount(account); }}><Trash2 size={14} /> Delete user</button></div>}</div></>}</div></td></tr>)}</tbody></table></div><div className="budget-table-note"><WalletCards size={14} /><span>Limits reset monthly in UTC. Shared-key spend counts toward each account that can see that key.</span></div></section>
+    {createOpen && <FormModal title="Create an account" submitLabel="Create account" onClose={() => setCreateOpen(false)} onSubmit={create}><label>Display name<input name="displayName" required minLength={2} placeholder="Nishant Verma" /></label><label>Email address<input name="email" type="email" required placeholder="nishant@example.com" /></label><label>Temporary password<input name="password" type="password" minLength={12} required placeholder="12+ characters" /></label><label>Role<select name="role" value={createRole} onChange={(event) => setCreateRole(event.target.value as "user" | "root")}><option value="user">User — assigned keys only</option><option value="root">Root — every tracked key</option></select></label>{createRole === "user" && <><BudgetFields enabled={createBudgetEnabled} dollars={createBudgetDollars} onEnabled={setCreateBudgetEnabled} onDollars={setCreateBudgetDollars} /><fieldset className="key-picker"><legend>Assign keys now <span>(optional)</span></legend><p>Select every key this person should be able to track.</p><div className="assignment-list compact">{activeKeys.map((key) => { const checked = createKeyIds.includes(key.id); return <label key={key.id}><input type="checkbox" checked={checked} onChange={(event) => setCreateKeyIds((current) => event.target.checked ? [...current, key.id] : current.filter((id) => id !== key.id))} /><span className="fake-check">{checked && <Check size={13} />}</span><span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!activeKeys.length && <MiniEmpty text="Add a tracked key first." />}</fieldset></>}<p className="modal-note"><LockKeyhole size={15} /> Ask the user to change this temporary password after sign-in.</p></FormModal>}
+    {editAccount && <FormModal title={`Edit ${editAccount.displayName}`} submitLabel="Save changes" onClose={() => setEditAccount(null)} onSubmit={update}><label>Display name<input name="displayName" required minLength={2} defaultValue={editAccount.displayName} /></label><label>Email address<input name="email" type="email" required defaultValue={editAccount.email} /></label><label>Access status<select name="status" defaultValue={editAccount.status}><option value="active">Active</option><option value="disabled">Disabled</option></select></label><label>New password <span>(leave blank to keep current)</span><input name="password" type="password" minLength={12} placeholder="No password change" /></label><BudgetFields enabled={editBudgetEnabled} dollars={editBudgetDollars} onEnabled={setEditBudgetEnabled} onDollars={setEditBudgetDollars} /></FormModal>}
+    {manage && <Modal title={`Assign keys to ${manage.displayName}`} onClose={() => setManage(null)}><p className="modal-subtitle">Changes take effect immediately. Monthly usage is recalculated across every checked key.</p><div className="assignment-list">{activeKeys.map((key) => { const checked = assignments.some((item) => item.accountId === manage.id && item.apiKeyId === key.id); const pending = pendingAssignments.includes(key.id); const shared = assignments.filter((item) => item.apiKeyId === key.id && item.accountId !== manage.id).length; return <label className={pending ? "pending" : ""} key={key.id}><input type="checkbox" checked={checked} disabled={pending} onChange={(event) => void assign(key.id, event.target.checked)} /><span className="fake-check">{pending ? <LoaderCircle className="spin" size={12} /> : checked && <Check size={13} />}</span><span><strong>{key.label}{shared ? <em>{shared} other {shared === 1 ? "account" : "accounts"}</em> : null}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!activeKeys.length && <MiniEmpty text="Add a tracked key first." />}<p className="modal-note"><TriangleAlert size={15} /> A shared key’s full spend is counted for every account it is assigned to.</p></Modal>}
     {deleteAccount && <Modal title="Delete user" onClose={() => { if (!deleting) setDeleteAccount(null); }}><div className="confirm-delete"><span className="danger-icon"><Trash2 size={20} /></span><p>Delete <strong>{deleteAccount.displayName}</strong>?</p><small>{deleteAccount.email}</small><p className="modal-subtitle">They will immediately lose access and all key assignments. Their account details will be anonymized while security audit history is retained.</p></div><div className="modal-actions"><button className="button secondary" disabled={deleting} onClick={() => setDeleteAccount(null)}>Cancel</button><button className="button danger" disabled={deleting} onClick={() => void removeAccount()}>{deleting && <LoaderCircle className="spin" size={16} />} Delete user</button></div></Modal>}
   </ManagementPage>;
+}
+
+function BudgetFields({ enabled, dollars, onEnabled, onDollars }: { enabled: boolean; dollars: string; onEnabled: (enabled: boolean) => void; onDollars: (dollars: string) => void }) {
+  return <fieldset className={enabled ? "budget-fields enabled" : "budget-fields"}>
+    <legend>Monthly credit guardrail</legend>
+    <label className="budget-toggle"><input aria-label="Monitor a monthly credit limit" type="checkbox" checked={enabled} onChange={(event) => onEnabled(event.target.checked)} /><span className="toggle-track"><span /></span><span><strong>Monitor a monthly limit</strong><small>Resets on the first day of each month, UTC</small></span></label>
+    {enabled && <label>Monthly limit (USD)<div className="currency-input"><span>$</span><input name="monthlyBudgetUsd" inputMode="decimal" type="number" min="1" max="1000000" step="0.01" required value={dollars} onChange={(event) => onDollars(event.target.value)} /></div></label>}
+    <p><TriangleAlert size={13} /> ARGUS reports approaching or exceeded limits. It does not interrupt OpenAI requests.</p>
+  </fieldset>;
+}
+
+function AccountBudget({ account, loading }: { account: Account; loading: boolean }) {
+  if (account.budgetLimitCents === null || account.budgetLimitCents === undefined) return <span className="budget-none">No limit</span>;
+  if (loading && account.budgetSpentCents === null) return <div className="account-budget loading"><span className="skeleton-line" /><div className="mini-budget-meter" /></div>;
+  const spent = account.budgetSpentCents;
+  const percentUsed = spent === null || spent === undefined ? null : (spent / account.budgetLimitCents) * 100;
+  const state = percentUsed === null ? "unavailable" : percentUsed >= 100 ? "exceeded" : percentUsed >= 80 ? "warning" : "healthy";
+  return <div className={`account-budget ${state}`}><div><strong>{spent === null || spent === undefined ? "—" : cents(spent)}</strong><span>/ {cents(account.budgetLimitCents)}</span></div><div className="mini-budget-meter"><span style={{ width: `${Math.min(100, Math.max(0, percentUsed ?? 0))}%` }} /></div></div>;
 }
 
 function AuditTrail() {
@@ -461,7 +539,7 @@ function CardSkeleton({ count }: { count: number }) { return <>{Array.from({ len
 function TableSkeleton({ columns }: { columns: number }) { return <>{Array.from({ length: 4 }, (_, row) => <tr key={row}>{Array.from({ length: columns }, (_, col) => <td key={col}><span className="skeleton-line" /></td>)}</tr>)}</>; }
 function EmptyOverview() { return <section className="empty-overview"><div className="empty-icon"><KeyRound /></div><p className="eyebrow">NO KEYS IN VIEW</p><h2>The watchlist is empty.</h2><p>Add a tracked API Key ID, or ask a root user to assign one to your account.</p></section>; }
 function ServiceGlyph({ name }: { name: string }) { return name.includes("Completion") ? <Zap size={16} /> : name.includes("Embedding") ? <Layers3 size={16} /> : name.includes("search") ? <Search size={16} /> : <Sparkles size={16} />; }
-function AuditGlyph({ action }: { action: string }) { return action.includes("login") ? <ShieldCheck size={16} /> : action.includes("key") ? <KeyRound size={16} /> : <Users size={16} />; }
+function AuditGlyph({ action }: { action: string }) { return action.includes("login") ? <ShieldCheck size={16} /> : action.includes("budget") ? <WalletCards size={16} /> : action.includes("key") ? <KeyRound size={16} /> : <Users size={16} />; }
 function SpendTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) { if (!active || !payload?.length) return null; return <div className="chart-tooltip"><small>{label}</small><strong>{money.format(payload[0].value)}</strong></div>; }
 function ModelTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: Dashboard["models"][number] }> }) { if (!active || !payload?.length) return null; const model = payload[0].payload; return <div className="chart-tooltip"><small>{model.name}</small><strong>{compact.format(model.totalTokens)} tokens</strong><span>{compact.format(model.requests)} requests</span></div>; }
 function dayPeriod() { const hour = new Date().getHours(); return hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"; }
@@ -469,6 +547,8 @@ function initials(value: string) { return value.split(/\s+/).slice(0, 2).map((pa
 function maskKey(value: string) { return value.length <= 12 ? value : `${value.slice(0, 8)}••••${value.slice(-4)}`; }
 function shortId(value: string) { return value.length < 18 ? value : `${value.slice(0, 9)}…${value.slice(-4)}`; }
 function percent(value: number, total: number) { return total ? Math.round((value / total) * 100) : 0; }
+function cents(value: number) { return money.format(value / 100); }
+function dollarsToCents(value: string) { const amount = Number(value); if (!Number.isFinite(amount) || amount < 1 || amount > 1_000_000) throw new Error("Enter a monthly limit between $1 and $1,000,000."); return Math.round(amount * 100); }
 function relativeTime(timestamp: number) { const seconds = Math.max(0, Math.floor(Date.now() / 1000) - timestamp); if (seconds < 60) return "just now"; if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`; if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`; return `${Math.floor(seconds / 86_400)}d ago`; }
 function humanAction(action: string) { return action.replaceAll(".", " ").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); }
 function errorMessage(reason: unknown) { return reason instanceof Error ? reason.message : "Request failed."; }

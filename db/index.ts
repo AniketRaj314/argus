@@ -131,6 +131,7 @@ async function initializeSchema() {
       updated_at INTEGER NOT NULL,
       last_login_at INTEGER,
       password_changed_at INTEGER NOT NULL,
+      monthly_budget_cents INTEGER,
       deleted_at INTEGER
     )`),
     db.prepare(`CREATE TABLE IF NOT EXISTS api_keys (
@@ -177,6 +178,13 @@ async function initializeSchema() {
       created_at INTEGER NOT NULL
     )`),
     db.prepare("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS deleted_at INTEGER"),
+    db.prepare("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS monthly_budget_cents INTEGER"),
+    db.prepare(`DO $$ BEGIN
+      IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'accounts_monthly_budget_check') THEN
+        ALTER TABLE accounts ADD CONSTRAINT accounts_monthly_budget_check
+          CHECK (monthly_budget_cents IS NULL OR monthly_budget_cents >= 100);
+      END IF;
+    END $$`),
     db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_single_root ON accounts ((role)) WHERE role = 'root'"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_account_id ON sessions(account_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)"),
@@ -197,4 +205,5 @@ export type AccountRow = {
   created_at: number;
   updated_at: number;
   last_login_at: number | null;
+  monthly_budget_cents: number | null;
 };
