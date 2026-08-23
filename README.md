@@ -4,9 +4,12 @@ Secure, assignment-scoped OpenAI API usage intelligence.
 
 ARGUS is an out-of-band monitoring dashboard. It reads organization Usage and Costs data with a server-side OpenAI Admin key; it never proxies or participates in normal inference traffic. Root users register OpenAI API Key **IDs** (`key_…`), create accounts, and assign one or many tracked key IDs to each account. Normal users can only query keys assigned to them.
 
+The public product page is served at `/`; the authenticated dashboard and first-run setup live at `/app`.
+
 ## What V1 includes
 
-- First-run root setup and a dedicated login screen
+- Static public product page with a code-rendered demo dashboard
+- First-run root setup and a dedicated login screen under `/app`
 - Root and user roles with server-enforced authorization
 - Self-service password changes with current-password verification and full session invalidation
 - Multiple tracked keys per account; root users see every active tracked key
@@ -59,7 +62,7 @@ Requirements: Node.js 22.13 or newer.
    npm run dev
    ```
 
-5. Open `http://localhost:3000`. On first launch, create the root account using the setup token from `.dev.vars`. Once a root exists, the setup endpoint permanently refuses additional setup requests.
+5. Open `http://localhost:3000` for the public product page, then continue to `http://localhost:3000/app`. On first launch, create the root account using the setup token from `.dev.vars`. Once a root exists, the setup endpoint permanently refuses additional setup requests.
 
 6. Open **Tracked keys** to sync every visible project API Key ID from OpenAI. Manual `key_…` entry remains available as a fallback. Then create accounts and assign keys under **Accounts**.
 
@@ -140,11 +143,11 @@ The application creates missing tables safely on first server request. The check
 
 ### Vercel
 
-Import the Git repository as a Next.js project and add `DATABASE_URL`, `ARGUS_APP_ORIGIN`, `OPENAI_ADMIN_KEY`, `ARGUS_SETUP_TOKEN`, `ARGUS_PASSWORD_PEPPER`, and `ARGUS_DEMO_MODE=false` under project environment variables. Deploy, visit the production URL, and complete the one-time root setup. Keep Preview and Production on separate databases or Neon branches when preview deployments are enabled.
+Import the Git repository as a Next.js project and add `DATABASE_URL`, `ARGUS_APP_ORIGIN`, `OPENAI_ADMIN_KEY`, `ARGUS_SETUP_TOKEN`, `ARGUS_PASSWORD_PEPPER`, and `ARGUS_DEMO_MODE=false` under project environment variables. Deploy, visit `/app` on the production URL, and complete the one-time root setup. Keep Preview and Production on separate databases or Neon branches when preview deployments are enabled.
 
 ### Railway
 
-Create a service from the Git repository. Railway detects Next.js and uses `npm run build` plus `npm start`. Add the same server-only variables to the service, set `ARGUS_APP_ORIGIN` to the final HTTPS domain, generate a public domain, then complete root setup at that URL. Set Railway's healthcheck path to `/api/health`; it returns `200` only when the application and database are operational. A Railway PostgreSQL service is also compatible if `DATABASE_URL` points to it.
+Create a service from the Git repository. Railway detects Next.js and uses `npm run build` plus `npm start`. Add the same server-only variables to the service, set `ARGUS_APP_ORIGIN` to the final HTTPS domain, generate a public domain, then complete root setup at `/app`. Set Railway's healthcheck path to `/api/health`; it returns `200` only when the application and database are operational. A Railway PostgreSQL service is also compatible if `DATABASE_URL` points to it.
 
 The human-readable `/health` page reports the application version, deployment revision, environment, safe dependency status, and response time. It intentionally exposes no credentials, database addresses, accounts, or API key identifiers.
 

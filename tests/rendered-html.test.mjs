@@ -45,7 +45,7 @@ async function walk(url) {
   return files;
 }
 
-test("server-renders the finished ARGUS application shell with security headers", async () => {
+test("server-renders the static ARGUS product page with security headers", async () => {
   assert.equal(firstResponse.status, 200);
   assert.match(firstResponse.headers.get("content-type") ?? "", /^text\/html\b/i);
   assert.equal(firstResponse.headers.get("x-frame-options"), "DENY");
@@ -56,9 +56,21 @@ test("server-renders the finished ARGUS application shell with security headers"
   assert.match(policy, /script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
   assert.doesNotMatch(policy.match(/script-src[^;]+/)?.[0] ?? "", /'unsafe-inline'/);
   const html = await firstResponse.text();
+  assert.match(html, /<title>ARGUS — Every API key\. Accounted for\.<\/title>/i);
+  assert.match(html, /Every API key/i);
+  assert.match(html, /href="\/app"/i);
+  assert.match(html, /Server-side by design/i);
+  assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
+});
+
+test("the authenticated ARGUS application is served under /app", async () => {
+  const response = await fetch(`${origin}/app`);
+  assert.equal(response.status, 200);
+  assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
+  const html = await response.text();
   assert.match(html, /<title>ARGUS — API usage intelligence<\/title>/i);
   assert.match(html, /Bringing ARGUS online/i);
-  assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
+  assert.match(html, /noindex/i);
 });
 
 test("the browser bundle contains no server credential names or sample secrets", async () => {
@@ -79,13 +91,13 @@ test("health page and probe expose safe release status", async () => {
   assert.equal(page.status, 200);
   const html = await page.text();
   assert.match(html, /System status/i);
-  assert.match(html, /v(?:<!-- -->)?1\.0\.0/);
+  assert.match(html, /v(?:<!-- -->)?1\.1\.0/);
   assert.doesNotMatch(html, /DATABASE_URL|OPENAI_ADMIN_KEY|ARGUS_PASSWORD_PEPPER|postgresql:\/\//);
 
   const probe = await fetch(`${origin}/api/health`);
   assert.ok([200, 503].includes(probe.status));
   const body = await probe.json();
-  assert.equal(body.version, "1.0.0");
+  assert.equal(body.version, "1.1.0");
   assert.ok(["operational", "degraded"].includes(body.status));
   assert.equal(typeof body.responseTimeMs, "number");
 });

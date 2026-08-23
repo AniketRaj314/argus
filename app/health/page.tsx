@@ -50,7 +50,7 @@ export default async function HealthPage() {
 
       <footer className={styles.footer}>
         <span>No credentials, account data, or key identifiers are exposed here.</span>
-        <Link href="/">Return to ARGUS <b>→</b></Link>
+        <Link href="/app">Open ARGUS <b>→</b></Link>
       </footer>
     </section>
   </main>;
