@@ -508,7 +508,7 @@ function ChangePasswordModal({ csrfToken, onClose, onChanged }: { csrfToken: str
     <label>Current password<input name="currentPassword" type={visible ? "text" : "password"} autoComplete="current-password" required /></label>
     <label>New password<input name="newPassword" type={visible ? "text" : "password"} autoComplete="new-password" minLength={12} required placeholder="12+ characters" /></label>
     <label>Confirm new password<input name="confirmPassword" type={visible ? "text" : "password"} autoComplete="new-password" minLength={12} required /></label>
-    <label className="show-passwords"><input type="checkbox" checked={visible} onChange={(event) => setVisible(event.target.checked)} /><span className="fake-check">{visible && <Check size={13} />}</span><span>Show passwords</span></label>
+    <button type="button" className="show-passwords" role="switch" aria-checked={visible} onClick={() => setVisible((current) => !current)}><span className="toggle-track" aria-hidden="true"><span /></span><span>Show passwords</span></button>
     <p className="modal-note"><ShieldCheck size={15} /> Use at least 12 characters with uppercase, lowercase, and a number. All active sessions will be signed out.</p>
   </FormModal>;
 }
