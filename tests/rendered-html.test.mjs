@@ -56,7 +56,7 @@ test("server-renders the static ARGUS product page with security headers", async
   assert.match(policy, /script-src 'self' 'nonce-[^']+' 'strict-dynamic'/);
   assert.doesNotMatch(policy.match(/script-src[^;]+/)?.[0] ?? "", /'unsafe-inline'/);
   const html = await firstResponse.text();
-  assert.match(html, /<title>ARGUS — Every API key\. Accounted for\.<\/title>/i);
+  assert.match(html, /<title>ARGUS: Every API key\. Accounted for\.<\/title>/i);
   assert.match(html, /Every API key/i);
   assert.match(html, /href="\/app"/i);
   assert.match(html, /Server-side by design/i);
@@ -68,7 +68,7 @@ test("the authenticated ARGUS application is served under /app", async () => {
   assert.equal(response.status, 200);
   assert.match(response.headers.get("content-type") ?? "", /^text\/html\b/i);
   const html = await response.text();
-  assert.match(html, /<title>ARGUS — API usage intelligence<\/title>/i);
+  assert.match(html, /<title>ARGUS: API usage intelligence<\/title>/i);
   assert.match(html, /Bringing ARGUS online/i);
   assert.match(html, /noindex/i);
 });

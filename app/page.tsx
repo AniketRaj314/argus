@@ -18,7 +18,7 @@ import { ArgusMark } from "./components/ArgusLogo";
 import styles from "./landing.module.css";
 
 export const metadata: Metadata = {
-  title: { absolute: "ARGUS — Every API key. Accounted for." },
+  title: { absolute: "ARGUS: Every API key. Accounted for." },
   description: "Secure OpenAI API usage intelligence for teams sharing one organization.",
 };
 
@@ -55,14 +55,14 @@ export default function Home() {
         <div className={styles.heroCopy}>
           <div className={styles.signal}><span /> LIVE ORGANIZATION VISIBILITY</div>
           <h1>Every API key.<br /><em>Accounted for.</em></h1>
-          <p>See spend, tokens, models, and activity across one OpenAI organization—then give every person exactly the view they need.</p>
+          <p>See spend, tokens, models, and activity across one OpenAI organization, then give every person exactly the view they need.</p>
           <div className={styles.heroActions}>
             <Link href="/app" className={styles.primaryCta}>Open the dashboard <ArrowRight size={17} /></Link>
             <a href="#product" className={styles.secondaryCta}>Explore ARGUS</a>
           </div>
           <div className={styles.heroProof}>
             <span><ShieldCheck size={16} /> Admin credentials stay server-side</span>
-            <span><Eye size={16} /> Usage only—never in the request path</span>
+            <span><Eye size={16} /> Usage only. Never in the request path</span>
           </div>
         </div>
         <div className={styles.heroOrbit} aria-hidden="true">

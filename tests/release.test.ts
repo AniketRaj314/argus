@@ -17,3 +17,11 @@ test("password visibility uses an explicit switch instead of a native checkbox",
   assert.doesNotMatch(app, /className="show-passwords"><input type="checkbox"/);
   assert.match(app, /href="\/" className="home-mark" aria-label="Go to ARGUS home"/);
 });
+
+test("user-facing site copy contains no em dashes", async () => {
+  const files = ["app/page.tsx", "app/layout.tsx", "app/app/page.tsx", "app/health/page.tsx", "app/components/ArgusApp.tsx"];
+  for (const file of files) {
+    const source = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
+    assert.doesNotMatch(source, /—/, file);
+  }
+});

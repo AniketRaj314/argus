@@ -17,18 +17,18 @@ const metadataOrigin = process.env.ARGUS_APP_ORIGIN ?? "http://localhost:3000";
 
 export const metadata: Metadata = {
   metadataBase: new URL(metadataOrigin),
-  title: { default: "ARGUS — API usage intelligence", template: "%s · ARGUS" },
+  title: { default: "ARGUS: API usage intelligence", template: "%s · ARGUS" },
   description,
   icons: { icon: "/favicon.svg", shortcut: "/favicon.svg" },
   openGraph: {
     type: "website",
-    title: "ARGUS — API usage intelligence",
+    title: "ARGUS: API usage intelligence",
     description,
     images: [{ url: "/og.png", width: 1672, height: 941, alt: "ARGUS API usage intelligence dashboard" }],
   },
   twitter: {
     card: "summary_large_image",
-    title: "ARGUS — API usage intelligence",
+    title: "ARGUS: API usage intelligence",
     description,
     images: ["/og.png"],
   },

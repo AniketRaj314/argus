@@ -7,7 +7,7 @@ import styles from "./health.module.css";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: { absolute: "System health — ARGUS" },
+  title: { absolute: "ARGUS: System health" },
   description: "Current ARGUS service health and release information.",
 };
 
