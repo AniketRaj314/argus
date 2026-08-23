@@ -102,13 +102,13 @@ test("health page and probe expose safe release status", async () => {
   assert.equal(page.status, 200);
   const html = await page.text();
   assert.match(html, /System status/i);
-  assert.match(html, /v(?:<!-- -->)?1\.1\.0/);
+  assert.match(html, /v(?:<!-- -->)?1\.1\.1/);
   assert.doesNotMatch(html, /DATABASE_URL|OPENAI_ADMIN_KEY|ARGUS_PASSWORD_PEPPER|postgresql:\/\//);
 
   const probe = await fetch(`${origin}/api/health`);
   assert.ok([200, 503].includes(probe.status));
   const body = await probe.json();
-  assert.equal(body.version, "1.1.0");
+  assert.equal(body.version, "1.1.1");
   assert.ok(["operational", "degraded"].includes(body.status));
   assert.equal(typeof body.responseTimeMs, "number");
 });

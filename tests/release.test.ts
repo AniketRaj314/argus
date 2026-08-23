@@ -4,7 +4,7 @@ import test from "node:test";
 import packageJson from "../package.json";
 
 test("release version and favicon ship together", async () => {
-  assert.equal(packageJson.version, "1.1.0");
+  assert.equal(packageJson.version, "1.1.1");
   const favicon = await readFile(new URL("../public/favicon.svg", import.meta.url), "utf8");
   assert.match(favicon, /ARGUS watchful eye/);
   assert.match(favicon, /#3EE887/i);
@@ -24,4 +24,11 @@ test("user-facing site copy contains no em dashes", async () => {
     const source = await readFile(new URL(`../${file}`, import.meta.url), "utf8");
     assert.doesNotMatch(source, /—/, file);
   }
+});
+
+test("scrollable surfaces use the ARGUS scrollbar treatment", async () => {
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
+  assert.match(styles, /scrollbar-width:\s*thin/);
+  assert.match(styles, /\*::-webkit-scrollbar-thumb\s*\{/);
+  assert.match(styles, /scrollbar-color:\s*#1d5662 transparent/i);
 });

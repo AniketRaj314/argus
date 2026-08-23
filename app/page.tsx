@@ -145,7 +145,7 @@ export default async function Home() {
       <footer className={styles.footer}>
         <Link href="/" className={styles.brand}><ArgusMark /><span>ARGUS</span></Link>
         <p>Secure OpenAI API usage intelligence.</p>
-        <div><Link href="/health">System health</Link><Link href="/app">Sign in</Link><span>v1.1.0</span></div>
+        <div><Link href="/health">System health</Link><Link href="/app">Sign in</Link><span>v1.1.1</span></div>
       </footer>
     </main>
   );
