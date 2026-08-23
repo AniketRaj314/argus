@@ -38,6 +38,7 @@ function createClient(): postgres.Sql {
     connect_timeout: 15,
     prepare: false,
     ssl: local ? false : "require",
+    onnotice: () => undefined,
   });
 }
 

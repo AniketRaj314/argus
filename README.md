@@ -65,6 +65,7 @@ Requirements: Node.js 22.13 or newer.
 | Variable | Required | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | Production | Server-only pooled PostgreSQL connection string. |
+| `DATABASE_URL_UNPOOLED` | Migrations | Server-only direct PostgreSQL connection string for migration and administration tools. The running app does not read it. |
 | `OPENAI_ADMIN_KEY` | For live data | Server-only organization Admin key used for Usage and Costs requests. |
 | `ARGUS_SETUP_TOKEN` | First run | One-time value required to create the first root account. |
 | `ARGUS_PASSWORD_PEPPER` | Recommended | Independent server-only value mixed into password hashing. Keep it stable after launch. |
@@ -126,8 +127,8 @@ ARGUS is a standard Next.js application and uses the same build on Vercel and Ra
 ### Neon
 
 1. Create a Neon project and open **Connect**.
-2. Enable **Pooled connection** and copy the `postgresql://...-pooler...` URL.
-3. Save it as the server-only `DATABASE_URL`. Never give it a `NEXT_PUBLIC_` prefix.
+2. Enable **Pooled connection** and copy the `postgresql://...-pooler...` URL to the server-only `DATABASE_URL`.
+3. Disable pooling and copy the direct URL to `DATABASE_URL_UNPOOLED` for migrations. Never give either value a `NEXT_PUBLIC_` prefix.
 
 The application creates missing tables safely on first server request. The checked-in migration can also be applied through your normal migration workflow before the first deployment.
 
