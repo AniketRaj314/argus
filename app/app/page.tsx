@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { connection } from "next/server";
 import { ArgusApp } from "../components/ArgusApp";
 
 export const metadata: Metadata = {
@@ -7,6 +8,7 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-export default function ApplicationPage() {
+export default async function ApplicationPage() {
+  await connection();
   return <ArgusApp />;
 }

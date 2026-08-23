@@ -4,7 +4,7 @@ Secure, assignment-scoped OpenAI API usage intelligence.
 
 ARGUS is an out-of-band monitoring dashboard. It reads organization Usage and Costs data with a server-side OpenAI Admin key; it never proxies or participates in normal inference traffic. Root users register OpenAI API Key **IDs** (`key_…`), create accounts, and assign one or many tracked key IDs to each account. Normal users can only query keys assigned to them.
 
-The public product page is served at `/`; the authenticated dashboard and first-run setup live at `/app`.
+The public product page is served at `/`; the authenticated dashboard and first-run setup live at `/app`. Both pages contain static product UI, but are rendered per request so Next.js can attach a fresh Content Security Policy nonce to every bootstrap script.
 
 ## What V1 includes
 

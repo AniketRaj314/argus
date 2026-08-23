@@ -45,7 +45,16 @@ async function walk(url) {
   return files;
 }
 
-test("server-renders the static ARGUS product page with security headers", async () => {
+function assertMatchingScriptNonces(response, html) {
+  const policy = response.headers.get("content-security-policy") ?? "";
+  const nonce = policy.match(/'nonce-([^']+)'/)?.[1];
+  assert.ok(nonce, "CSP must include a nonce");
+  const scripts = [...html.matchAll(/<script\b[^>]*>/gi)].map(([tag]) => tag);
+  assert.ok(scripts.length > 0, "page must include Next.js bootstrap scripts");
+  for (const script of scripts) assert.match(script, new RegExp(`\\bnonce=["']${nonce}["']`));
+}
+
+test("server-renders the public ARGUS product page with security headers", async () => {
   assert.equal(firstResponse.status, 200);
   assert.match(firstResponse.headers.get("content-type") ?? "", /^text\/html\b/i);
   assert.equal(firstResponse.headers.get("x-frame-options"), "DENY");
@@ -60,6 +69,7 @@ test("server-renders the static ARGUS product page with security headers", async
   assert.match(html, /Every API key/i);
   assert.match(html, /href="\/app"/i);
   assert.match(html, /Server-side by design/i);
+  assertMatchingScriptNonces(firstResponse, html);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 
@@ -71,6 +81,7 @@ test("the authenticated ARGUS application is served under /app", async () => {
   assert.match(html, /<title>ARGUS: API usage intelligence<\/title>/i);
   assert.match(html, /Bringing ARGUS online/i);
   assert.match(html, /noindex/i);
+  assertMatchingScriptNonces(response, html);
 });
 
 test("the browser bundle contains no server credential names or sample secrets", async () => {

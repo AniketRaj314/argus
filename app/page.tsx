@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
+import { connection } from "next/server";
 import {
   Activity,
   ArrowRight,
@@ -34,7 +35,8 @@ const activity = [
   { key: "Image lab", model: "gpt-image-2", meta: "1 image · 1 req", cost: "$0.04", time: "34m ago" },
 ];
 
-export default function Home() {
+export default async function Home() {
+  await connection();
   return (
     <main className={styles.page}>
       <div className={styles.glow} aria-hidden="true" />
