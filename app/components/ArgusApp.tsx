@@ -16,8 +16,8 @@ import { ArgusMark } from "./ArgusLogo";
 type Account = {
   id: string; email: string; displayName: string; role: "root" | "user";
   status: "active" | "disabled"; createdAt: number; lastLoginAt: number | null; keyCount?: number;
-  monthlyBudgetCents?: number | null; budgetLimitCents?: number | null; budgetSpentCents?: number | null;
-  budgetPeriodStart?: number; budgetPeriodEnd?: number; sharedKeyCount?: number;
+  creditLimitCents?: number | null; budgetLimitCents?: number | null; budgetSpentCents?: number | null;
+  sharedKeyCount?: number;
 };
 type TrackedKey = { id: string; keyId: string; label: string; projectId: string | null; status?: "active" | "archived"; assignedNames?: string[]; assignmentCount?: number; createdAt?: number };
 type Bootstrap = { configured: boolean; authenticated: boolean; csrfToken?: string; account?: Account; keys?: TrackedKey[] };
@@ -31,7 +31,7 @@ type Dashboard = {
   services: Array<{ name: string; requests: number }>;
   recent: Array<{ id: string; timestamp: number; keyLabel: string; model: string; tokens: number; requests: number; spend: number }>;
   notices: string[];
-  budget: { limitCents: number; spentCents: number | null; remainingCents: number | null; percentUsed: number | null; periodStart: number; periodEnd: number; status: "healthy" | "warning" | "exceeded" | "unavailable" } | null;
+  budget: { limitCents: number; spentCents: number | null; remainingCents: number | null; percentUsed: number | null; trackingStart: number; status: "healthy" | "warning" | "exceeded" | "unavailable" } | null;
 };
 type AuditEvent = { id: string; action: string; targetType: string; targetId: string | null; metadata: Record<string, unknown>; createdAt: number; actorName: string; actorEmail: string | null };
 type Assignment = { accountId: string; apiKeyId: string; assignedAt: number };
@@ -261,12 +261,11 @@ function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange
 
 function BudgetBanner({ budget }: { budget: NonNullable<Dashboard["budget"]> }) {
   const percentUsed = Math.min(100, Math.max(0, budget.percentUsed ?? 0));
-  const resetDate = dateOnly.format(budget.periodEnd * 1000);
-  return <section className={`budget-banner ${budget.status}`} aria-label="Monthly credit limit">
+  return <section className={`budget-banner ${budget.status}`} aria-label="Total credit limit">
     <div className="budget-mark"><WalletCards size={19} /></div>
     <div className="budget-copy">
-      <p className="eyebrow">MONTHLY CREDIT GUARDRAIL</p>
-      <div><strong>{budget.spentCents === null ? "Usage unavailable" : `${cents(budget.spentCents)} of ${cents(budget.limitCents)} used`}</strong><span>Across all assigned keys · resets {resetDate} UTC</span></div>
+      <p className="eyebrow">TOTAL CREDIT ALLOCATION</p>
+      <div><strong>{budget.spentCents === null ? "Usage unavailable" : `${cents(budget.spentCents)} of ${cents(budget.limitCents)} used`}</strong><span>Across all assigned keys · all time</span></div>
     </div>
     <div className="budget-meter-wrap">
       <div className="budget-meter"><span style={{ width: `${percentUsed}%` }} /></div>
@@ -401,10 +400,10 @@ function AdminAccounts({ csrfToken, onChanged }: { csrfToken: string; onChanged:
   const loadBudgets = useCallback(async () => {
     setBudgetLoading(true);
     try {
-      const data = await requestJson<{ periodStart: number; periodEnd: number; accounts: Array<{ id: string; spentCents: number }> }>("/api/admin/accounts/budgets");
+      const data = await requestJson<{ trackingStart: number; accounts: Array<{ id: string; spentCents: number }> }>("/api/admin/accounts/budgets");
       setAccounts((current) => current.map((account) => {
         const usage = data.accounts.find((item) => item.id === account.id);
-        return usage ? { ...account, budgetSpentCents: usage.spentCents, budgetPeriodStart: data.periodStart, budgetPeriodEnd: data.periodEnd } : account;
+        return usage ? { ...account, budgetSpentCents: usage.spentCents } : account;
       }));
     } catch { /* Account management remains available when OpenAI costs are temporarily unavailable. */ }
     finally { setBudgetLoading(false); }
@@ -416,10 +415,10 @@ function AdminAccounts({ csrfToken, onChanged }: { csrfToken: string; onChanged:
   function openEdit(account: Account) { setEditBudgetEnabled(account.budgetLimitCents !== null); setEditBudgetDollars(account.budgetLimitCents ? (account.budgetLimitCents / 100).toFixed(2) : "50"); setEditAccount(account); }
   async function create(values: Record<string, FormDataEntryValue>) {
     const accountValues = { ...values };
-    delete accountValues.monthlyBudgetUsd;
+    delete accountValues.creditLimitUsd;
     await requestJson("/api/admin/accounts", { method: "POST", body: JSON.stringify({
       ...accountValues, apiKeyIds: createRole === "user" ? createKeyIds : [],
-      monthlyBudgetCents: createRole === "user" && createBudgetEnabled ? dollarsToCents(createBudgetDollars) : null,
+      creditLimitCents: createRole === "user" && createBudgetEnabled ? dollarsToCents(createBudgetDollars) : null,
     }) }, csrfToken);
     setCreateOpen(false); await load(); onChanged();
   }
@@ -428,7 +427,7 @@ function AdminAccounts({ csrfToken, onChanged }: { csrfToken: string; onChanged:
     const password = String(values.password ?? "").trim();
     const changes: Record<string, unknown> = {
       displayName: String(values.displayName), email: String(values.email), status: String(values.status),
-      monthlyBudgetCents: editBudgetEnabled ? dollarsToCents(editBudgetDollars) : null,
+      creditLimitCents: editBudgetEnabled ? dollarsToCents(editBudgetDollars) : null,
     };
     if (password) changes.password = password;
     await requestJson("/api/admin/accounts", { method: "PATCH", body: JSON.stringify({ id: editAccount.id, changes }) }, csrfToken);
@@ -470,21 +469,21 @@ function AdminAccounts({ csrfToken, onChanged }: { csrfToken: string; onChanged:
     finally { setDeleting(false); }
   }
   const activeKeys = keys.filter((key) => key.status === "active");
-  return <ManagementPage eyebrow="ROOT / ACCESS CONTROL" title="Accounts" description="Create people, assign keys, and monitor monthly credit guardrails from one control plane." action={<button className="button primary" onClick={openCreate}><Plus size={17} /> Create account</button>}>
+  return <ManagementPage eyebrow="ROOT / ACCESS CONTROL" title="Accounts" description="Create people, assign keys, and manage total credit allocations from one control plane." action={<button className="button primary" onClick={openCreate}><Plus size={17} /> Create account</button>}>
     {error && <InlineError text={error} />}
-    <section className="table-panel"><div className="table-toolbar"><div className="search-shell"><Search size={16} /><span>Account directory</span></div><span>{budgetLoading && <LoaderCircle className="spin" size={12} />} {accounts.length} total</span></div><div className="responsive-table"><table className="accounts-table"><thead><tr><th>Account</th><th>Role</th><th>Keys</th><th>Monthly limit</th><th>Last sign-in</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{loading ? <TableSkeleton columns={7} /> : accounts.map((account) => <tr key={account.id}><td><div className="person-cell"><span>{initials(account.displayName)}</span><div><strong>{account.displayName}</strong><small>{account.email}</small></div></div></td><td><span className={account.role === "root" ? "role root" : "role"}>{account.role}</span></td><td>{account.role === "root" ? "All" : <span>{account.keyCount}{account.sharedKeyCount ? <small className="shared-count">{account.sharedKeyCount} shared</small> : null}</span>}</td><td>{account.role === "root" ? <span className="budget-none">Global view</span> : <AccountBudget account={account} loading={budgetLoading} />}</td><td>{account.lastLoginAt ? dateTime.format(account.lastLoginAt * 1000) : "Never"}</td><td><Status status={account.status} /></td><td><div className="row-actions">{account.role !== "root" && <><button className="button ghost small" onClick={() => setManage(account)}>Assign keys</button><div className="account-menu-wrap" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuAccountId(null); }}><button className="icon-button small" aria-label={`Actions for ${account.displayName}`} aria-expanded={menuAccountId === account.id} onClick={() => setMenuAccountId((current) => current === account.id ? null : account.id)}><MoreHorizontal size={17} /></button>{menuAccountId === account.id && <div className="account-menu" role="menu"><button role="menuitem" onClick={() => { setMenuAccountId(null); openEdit(account); }}><Pencil size={14} /> Edit account</button><button role="menuitem" onClick={() => { setMenuAccountId(null); void toggle(account); }}>{account.status === "active" ? "Disable access" : "Enable access"}</button><button className="danger" role="menuitem" onClick={() => { setMenuAccountId(null); setDeleteAccount(account); }}><Trash2 size={14} /> Delete user</button></div>}</div></>}</div></td></tr>)}</tbody></table></div><div className="budget-table-note"><WalletCards size={14} /><span>Limits reset monthly in UTC. Shared-key spend counts toward each account that can see that key.</span></div></section>
+    <section className="table-panel"><div className="table-toolbar"><div className="search-shell"><Search size={16} /><span>Account directory</span></div><span>{budgetLoading && <LoaderCircle className="spin" size={12} />} {accounts.length} total</span></div><div className="responsive-table"><table className="accounts-table"><thead><tr><th>Account</th><th>Role</th><th>Keys</th><th>Total limit</th><th>Last sign-in</th><th>Status</th><th aria-label="Actions" /></tr></thead><tbody>{loading ? <TableSkeleton columns={7} /> : accounts.map((account) => <tr key={account.id}><td><div className="person-cell"><span>{initials(account.displayName)}</span><div><strong>{account.displayName}</strong><small>{account.email}</small></div></div></td><td><span className={account.role === "root" ? "role root" : "role"}>{account.role}</span></td><td>{account.role === "root" ? "All" : <span>{account.keyCount}{account.sharedKeyCount ? <small className="shared-count">{account.sharedKeyCount} shared</small> : null}</span>}</td><td>{account.role === "root" ? <span className="budget-none">Global view</span> : <AccountBudget account={account} loading={budgetLoading} />}</td><td>{account.lastLoginAt ? dateTime.format(account.lastLoginAt * 1000) : "Never"}</td><td><Status status={account.status} /></td><td><div className="row-actions">{account.role !== "root" && <><button className="button ghost small" onClick={() => setManage(account)}>Assign keys</button><div className="account-menu-wrap" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setMenuAccountId(null); }}><button className="icon-button small" aria-label={`Actions for ${account.displayName}`} aria-expanded={menuAccountId === account.id} onClick={() => setMenuAccountId((current) => current === account.id ? null : account.id)}><MoreHorizontal size={17} /></button>{menuAccountId === account.id && <div className="account-menu" role="menu"><button role="menuitem" onClick={() => { setMenuAccountId(null); openEdit(account); }}><Pencil size={14} /> Edit account</button><button role="menuitem" onClick={() => { setMenuAccountId(null); void toggle(account); }}>{account.status === "active" ? "Disable access" : "Enable access"}</button><button className="danger" role="menuitem" onClick={() => { setMenuAccountId(null); setDeleteAccount(account); }}><Trash2 size={14} /> Delete user</button></div>}</div></>}</div></td></tr>)}</tbody></table></div><div className="budget-table-note"><WalletCards size={14} /><span>Total limits never reset. Shared-key spend counts toward each account that can see that key.</span></div></section>
     {createOpen && <FormModal title="Create an account" submitLabel="Create account" onClose={() => setCreateOpen(false)} onSubmit={create}><label>Display name<input name="displayName" required minLength={2} placeholder="Nishant Verma" /></label><label>Email address<input name="email" type="email" required placeholder="nishant@example.com" /></label><label>Temporary password<input name="password" type="password" minLength={12} required placeholder="12+ characters" /></label><label>Role<select name="role" value={createRole} onChange={(event) => setCreateRole(event.target.value as "user" | "root")}><option value="user">User — assigned keys only</option><option value="root">Root — every tracked key</option></select></label>{createRole === "user" && <><BudgetFields enabled={createBudgetEnabled} dollars={createBudgetDollars} onEnabled={setCreateBudgetEnabled} onDollars={setCreateBudgetDollars} /><fieldset className="key-picker"><legend>Assign keys now <span>(optional)</span></legend><p>Select every key this person should be able to track.</p><div className="assignment-list compact">{activeKeys.map((key) => { const checked = createKeyIds.includes(key.id); return <label key={key.id}><input type="checkbox" checked={checked} onChange={(event) => setCreateKeyIds((current) => event.target.checked ? [...current, key.id] : current.filter((id) => id !== key.id))} /><span className="fake-check">{checked && <Check size={13} />}</span><span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!activeKeys.length && <MiniEmpty text="Add a tracked key first." />}</fieldset></>}<p className="modal-note"><LockKeyhole size={15} /> Ask the user to change this temporary password after sign-in.</p></FormModal>}
     {editAccount && <FormModal title={`Edit ${editAccount.displayName}`} submitLabel="Save changes" onClose={() => setEditAccount(null)} onSubmit={update}><label>Display name<input name="displayName" required minLength={2} defaultValue={editAccount.displayName} /></label><label>Email address<input name="email" type="email" required defaultValue={editAccount.email} /></label><label>Access status<select name="status" defaultValue={editAccount.status}><option value="active">Active</option><option value="disabled">Disabled</option></select></label><label>New password <span>(leave blank to keep current)</span><input name="password" type="password" minLength={12} placeholder="No password change" /></label><BudgetFields enabled={editBudgetEnabled} dollars={editBudgetDollars} onEnabled={setEditBudgetEnabled} onDollars={setEditBudgetDollars} /></FormModal>}
-    {manage && <Modal title={`Assign keys to ${manage.displayName}`} onClose={() => setManage(null)}><p className="modal-subtitle">Changes take effect immediately. Monthly usage is recalculated across every checked key.</p><div className="assignment-list">{activeKeys.map((key) => { const checked = assignments.some((item) => item.accountId === manage.id && item.apiKeyId === key.id); const pending = pendingAssignments.includes(key.id); const shared = assignments.filter((item) => item.apiKeyId === key.id && item.accountId !== manage.id).length; return <label className={pending ? "pending" : ""} key={key.id}><input type="checkbox" checked={checked} disabled={pending} onChange={(event) => void assign(key.id, event.target.checked)} /><span className="fake-check">{pending ? <LoaderCircle className="spin" size={12} /> : checked && <Check size={13} />}</span><span><strong>{key.label}{shared ? <em>{shared} other {shared === 1 ? "account" : "accounts"}</em> : null}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!activeKeys.length && <MiniEmpty text="Add a tracked key first." />}<p className="modal-note"><TriangleAlert size={15} /> A shared key’s full spend is counted for every account it is assigned to.</p></Modal>}
+    {manage && <Modal title={`Assign keys to ${manage.displayName}`} onClose={() => setManage(null)}><p className="modal-subtitle">Changes take effect immediately. Total usage is recalculated across every checked key.</p><div className="assignment-list">{activeKeys.map((key) => { const checked = assignments.some((item) => item.accountId === manage.id && item.apiKeyId === key.id); const pending = pendingAssignments.includes(key.id); const shared = assignments.filter((item) => item.apiKeyId === key.id && item.accountId !== manage.id).length; return <label className={pending ? "pending" : ""} key={key.id}><input type="checkbox" checked={checked} disabled={pending} onChange={(event) => void assign(key.id, event.target.checked)} /><span className="fake-check">{pending ? <LoaderCircle className="spin" size={12} /> : checked && <Check size={13} />}</span><span><strong>{key.label}{shared ? <em>{shared} other {shared === 1 ? "account" : "accounts"}</em> : null}</strong><small>{maskKey(key.keyId)}</small></span></label>; })}</div>{!activeKeys.length && <MiniEmpty text="Add a tracked key first." />}<p className="modal-note"><TriangleAlert size={15} /> A shared key’s full spend is counted for every account it is assigned to.</p></Modal>}
     {deleteAccount && <Modal title="Delete user" onClose={() => { if (!deleting) setDeleteAccount(null); }}><div className="confirm-delete"><span className="danger-icon"><Trash2 size={20} /></span><p>Delete <strong>{deleteAccount.displayName}</strong>?</p><small>{deleteAccount.email}</small><p className="modal-subtitle">They will immediately lose access and all key assignments. Their account details will be anonymized while security audit history is retained.</p></div><div className="modal-actions"><button className="button secondary" disabled={deleting} onClick={() => setDeleteAccount(null)}>Cancel</button><button className="button danger" disabled={deleting} onClick={() => void removeAccount()}>{deleting && <LoaderCircle className="spin" size={16} />} Delete user</button></div></Modal>}
   </ManagementPage>;
 }
 
 function BudgetFields({ enabled, dollars, onEnabled, onDollars }: { enabled: boolean; dollars: string; onEnabled: (enabled: boolean) => void; onDollars: (dollars: string) => void }) {
   return <fieldset className={enabled ? "budget-fields enabled" : "budget-fields"}>
-    <legend>Monthly credit guardrail</legend>
-    <label className="budget-toggle"><input aria-label="Monitor a monthly credit limit" type="checkbox" checked={enabled} onChange={(event) => onEnabled(event.target.checked)} /><span className="toggle-track"><span /></span><span><strong>Monitor a monthly limit</strong><small>Resets on the first day of each month, UTC</small></span></label>
-    {enabled && <label>Monthly limit (USD)<div className="currency-input"><span>$</span><input name="monthlyBudgetUsd" inputMode="decimal" type="number" min="1" max="1000000" step="0.01" required value={dollars} onChange={(event) => onDollars(event.target.value)} /></div></label>}
+    <legend>Total credit allocation</legend>
+    <label className="budget-toggle"><input aria-label="Set a total credit limit" type="checkbox" checked={enabled} onChange={(event) => onEnabled(event.target.checked)} /><span className="toggle-track"><span /></span><span><strong>Set a total limit</strong><small>One lifetime allocation—no recurring reset</small></span></label>
+    {enabled && <label>Total limit (USD)<div className="currency-input"><span>$</span><input name="creditLimitUsd" inputMode="decimal" type="number" min="1" max="1000000" step="0.01" required value={dollars} onChange={(event) => onDollars(event.target.value)} /></div></label>}
     <p><TriangleAlert size={13} /> ARGUS reports approaching or exceeded limits. It does not interrupt OpenAI requests.</p>
   </fieldset>;
 }
@@ -539,7 +538,7 @@ function CardSkeleton({ count }: { count: number }) { return <>{Array.from({ len
 function TableSkeleton({ columns }: { columns: number }) { return <>{Array.from({ length: 4 }, (_, row) => <tr key={row}>{Array.from({ length: columns }, (_, col) => <td key={col}><span className="skeleton-line" /></td>)}</tr>)}</>; }
 function EmptyOverview() { return <section className="empty-overview"><div className="empty-icon"><KeyRound /></div><p className="eyebrow">NO KEYS IN VIEW</p><h2>The watchlist is empty.</h2><p>Add a tracked API Key ID, or ask a root user to assign one to your account.</p></section>; }
 function ServiceGlyph({ name }: { name: string }) { return name.includes("Completion") ? <Zap size={16} /> : name.includes("Embedding") ? <Layers3 size={16} /> : name.includes("search") ? <Search size={16} /> : <Sparkles size={16} />; }
-function AuditGlyph({ action }: { action: string }) { return action.includes("login") ? <ShieldCheck size={16} /> : action.includes("budget") ? <WalletCards size={16} /> : action.includes("key") ? <KeyRound size={16} /> : <Users size={16} />; }
+function AuditGlyph({ action }: { action: string }) { return action.includes("login") ? <ShieldCheck size={16} /> : action.includes("credit") || action.includes("budget") ? <WalletCards size={16} /> : action.includes("key") ? <KeyRound size={16} /> : <Users size={16} />; }
 function SpendTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) { if (!active || !payload?.length) return null; return <div className="chart-tooltip"><small>{label}</small><strong>{money.format(payload[0].value)}</strong></div>; }
 function ModelTooltip({ active, payload }: { active?: boolean; payload?: Array<{ payload: Dashboard["models"][number] }> }) { if (!active || !payload?.length) return null; const model = payload[0].payload; return <div className="chart-tooltip"><small>{model.name}</small><strong>{compact.format(model.totalTokens)} tokens</strong><span>{compact.format(model.requests)} requests</span></div>; }
 function dayPeriod() { const hour = new Date().getHours(); return hour < 12 ? "morning" : hour < 18 ? "afternoon" : "evening"; }
@@ -548,7 +547,7 @@ function maskKey(value: string) { return value.length <= 12 ? value : `${value.s
 function shortId(value: string) { return value.length < 18 ? value : `${value.slice(0, 9)}…${value.slice(-4)}`; }
 function percent(value: number, total: number) { return total ? Math.round((value / total) * 100) : 0; }
 function cents(value: number) { return money.format(value / 100); }
-function dollarsToCents(value: string) { const amount = Number(value); if (!Number.isFinite(amount) || amount < 1 || amount > 1_000_000) throw new Error("Enter a monthly limit between $1 and $1,000,000."); return Math.round(amount * 100); }
+function dollarsToCents(value: string) { const amount = Number(value); if (!Number.isFinite(amount) || amount < 1 || amount > 1_000_000) throw new Error("Enter a total limit between $1 and $1,000,000."); return Math.round(amount * 100); }
 function relativeTime(timestamp: number) { const seconds = Math.max(0, Math.floor(Date.now() / 1000) - timestamp); if (seconds < 60) return "just now"; if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`; if (seconds < 86_400) return `${Math.floor(seconds / 3600)}h ago`; return `${Math.floor(seconds / 86_400)}d ago`; }
 function humanAction(action: string) { return action.replaceAll(".", " ").replaceAll("_", " ").replace(/\b\w/g, (char) => char.toUpperCase()); }
 function errorMessage(reason: unknown) { return reason instanceof Error ? reason.message : "Request failed."; }

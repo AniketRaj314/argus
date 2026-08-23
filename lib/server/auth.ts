@@ -16,7 +16,7 @@ export type SafeAccount = {
   status: "active" | "disabled";
   createdAt: number;
   lastLoginAt: number | null;
-  monthlyBudgetCents: number | null;
+  creditLimitCents: number | null;
 };
 
 export type AuthSession = {
@@ -38,7 +38,7 @@ function safeAccount(row: AccountRow): SafeAccount {
     status: row.status,
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
-    monthlyBudgetCents: row.monthly_budget_cents,
+    creditLimitCents: row.credit_limit_cents,
   };
 }
 
@@ -79,7 +79,7 @@ export async function getSession(request: Request): Promise<AuthSession | null> 
   const row = await getDb().prepare(`SELECT
       s.token_hash, s.csrf_hash, s.expires_at, s.last_seen_at,
       a.id, a.email, a.display_name, a.password_hash, a.role, a.status,
-      a.created_at, a.updated_at, a.last_login_at, a.monthly_budget_cents
+      a.created_at, a.updated_at, a.last_login_at, a.credit_limit_cents
     FROM sessions s
     JOIN accounts a ON a.id = s.account_id
     WHERE s.token_hash = ? AND s.expires_at > ? AND a.status = 'active'`)

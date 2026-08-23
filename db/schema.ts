@@ -14,7 +14,8 @@ export const accounts = pgTable(
     updatedAt: integer("updated_at").notNull(),
     lastLoginAt: integer("last_login_at"),
     passwordChangedAt: integer("password_changed_at").notNull(),
-    monthlyBudgetCents: integer("monthly_budget_cents"),
+    legacyMonthlyBudgetCents: integer("monthly_budget_cents"),
+    creditLimitCents: integer("credit_limit_cents"),
     deletedAt: integer("deleted_at"),
   },
   (table) => [
@@ -22,7 +23,8 @@ export const accounts = pgTable(
     uniqueIndex("idx_single_root").on(table.role).where(sql`${table.role} = 'root'`),
     check("accounts_role_check", sql`${table.role} IN ('root', 'user')`),
     check("accounts_status_check", sql`${table.status} IN ('active', 'disabled')`),
-    check("accounts_monthly_budget_check", sql`${table.monthlyBudgetCents} IS NULL OR ${table.monthlyBudgetCents} >= 100`),
+    check("accounts_monthly_budget_check", sql`${table.legacyMonthlyBudgetCents} IS NULL OR ${table.legacyMonthlyBudgetCents} >= 100`),
+    check("accounts_credit_limit_check", sql`${table.creditLimitCents} IS NULL OR ${table.creditLimitCents} >= 100`),
   ],
 );
 

@@ -9,7 +9,7 @@ ARGUS is an out-of-band monitoring dashboard. It reads organization Usage and Co
 - First-run root setup and a dedicated login screen
 - Root and user roles with server-enforced authorization
 - Multiple tracked keys per account; root users see every active tracked key
-- Optional monthly per-account credit guardrails with consumption, remaining budget, warning, and exceeded states
+- Optional lifetime per-account credit allocations with consumption, remaining credit, warning, and exceeded states
 - 7-day, 30-day, and all-time spend charts, input/output/cached token totals, request counts, model distribution, service mix, per-key rollups, and recent usage
 - Root account, automatic OpenAI project-key sync, manual tracked-key fallback, assignment, and audit-trail screens
 - Responsive dark navy/teal UI with loading, empty, partial-data, and error states
@@ -62,7 +62,7 @@ Requirements: Node.js 22.13 or newer.
 
 6. Open **Tracked keys** to sync every visible project API Key ID from OpenAI. Manual `key_…` entry remains available as a fallback. Then create accounts and assign keys under **Accounts**.
 
-Account credit limits are monitoring guardrails denominated in USD and reset on the first day of each month in UTC. ARGUS does not proxy inference requests, so reaching a limit does not stop OpenAI traffic. Consumption is calculated from the full cost of assigned keys; when a key is shared, its spend counts toward each assigned account because OpenAI key-level usage cannot identify which ARGUS user initiated a request.
+Account credit limits are one-time monitoring allocations denominated in USD and never reset. ARGUS does not proxy inference requests, so reaching a limit does not stop OpenAI traffic. Consumption is calculated from the all-time cost of currently assigned keys; when a key is shared, its spend counts toward each assigned account because OpenAI key-level usage cannot identify which ARGUS user initiated a request.
 
 ## Environment variables
 

@@ -16,7 +16,7 @@ export async function GET(request: Request) {
     if (selectedId && selectedKeys.length === 0) throw new ApiError(403, "That key is not assigned to this account.", "FORBIDDEN");
     const [dashboard, budget] = await Promise.all([
       getDashboardData(selectedKeys, range),
-      session.account.role === "user" ? getBudgetSnapshot(session.account.monthlyBudgetCents, visibleKeys) : Promise.resolve(null),
+      session.account.role === "user" ? getBudgetSnapshot(session.account.creditLimitCents, visibleKeys) : Promise.resolve(null),
     ]);
     return Response.json({ ...dashboard, budget }, { headers: noStoreHeaders() });
   } catch (error) {
