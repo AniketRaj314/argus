@@ -6,7 +6,6 @@ import {
   BarChart3,
   Check,
   CircleDollarSign,
-  Database,
   Eye,
   KeyRound,
   LockKeyhole,
@@ -47,7 +46,6 @@ export default function Home() {
         </Link>
         <nav className={styles.nav} aria-label="Primary navigation">
           <a href="#product">Product</a>
-          <a href="#security">Security</a>
           <a href="#workflow">How it works</a>
         </nav>
         <Link href="/app" className={styles.headerCta}>Open ARGUS <ArrowRight size={15} /></Link>
@@ -131,22 +129,6 @@ export default function Home() {
           <article><b>01</b><div><RefreshCw size={20} /><h3>Sync identifiers</h3><p>ARGUS reads project API Key IDs using your server-held OpenAI Admin key.</p></div></article>
           <article><b>02</b><div><UsersRound size={20} /><h3>Assign access</h3><p>Create accounts, attach the right keys, and optionally set a total credit limit.</p></div></article>
           <article><b>03</b><div><Activity size={20} /><h3>Read the signal</h3><p>Each signed-in person sees only the usage their server-side assignments allow.</p></div></article>
-        </div>
-      </section>
-
-      <section className={styles.security} id="security">
-        <div className={styles.securityCopy}>
-          <div className={styles.securityMark}><ShieldCheck size={25} /></div>
-          <p>SECURITY IS THE ARCHITECTURE</p>
-          <h2>The browser never gets the keys to the control room.</h2>
-          <span>OpenAI Admin credentials, database access, authentication, authorization, and assignment checks all stay on the server. API Key IDs are treated as identifiers—not passwords.</span>
-          <Link href="/health">View system health <ArrowRight size={15} /></Link>
-        </div>
-        <div className={styles.securityGrid}>
-          <div><LockKeyhole size={18} /><strong>HttpOnly sessions</strong><small>Strict cookies and session-bound CSRF protection.</small></div>
-          <div><Database size={18} /><strong>No client secrets</strong><small>No public env variables or browser-side credential validation.</small></div>
-          <div><UsersRound size={18} /><strong>Server-enforced RBAC</strong><small>Every protected request checks identity, role, and assignment.</small></div>
-          <div><Eye size={18} /><strong>Audit-friendly control</strong><small>Administrative changes create safe, reviewable audit records.</small></div>
         </div>
       </section>
 

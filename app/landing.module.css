@@ -149,7 +149,7 @@
 
 .product { position: relative; z-index: 2; width: min(1320px, calc(100% - 32px)); margin: 0 auto; padding: 170px 0 130px; }
 .sectionIntro { text-align: center; }
-.sectionIntro > p, .featureLead > p, .securityCopy > p, .finalCta > p { margin: 0 0 17px; color: #5e838a; font-size: 9px; font-weight: 780; letter-spacing: .18em; }
+.sectionIntro > p, .featureLead > p, .finalCta > p { margin: 0 0 17px; color: #5e838a; font-size: 9px; font-weight: 780; letter-spacing: .18em; }
 .sectionIntro h2 { margin: 0; font-size: clamp(35px, 5vw, 58px); line-height: 1.03; letter-spacing: -.055em; font-weight: 490; }
 .sectionIntro > span { display: block; margin-top: 19px; color: #789397; font-size: 13px; }
 
@@ -237,19 +237,6 @@
 .steps h3 { margin: 34px 0 11px; font-size: 18px; }
 .steps p { margin: 0; color: #708c91; font-size: 11px; line-height: 1.65; }
 
-.security { position: relative; z-index: 2; width: min(1180px, calc(100% - 48px)); margin: 0 auto; padding: 170px 0; display: grid; grid-template-columns: .94fr 1.06fr; align-items: center; gap: 100px; }
-.securityMark { width: 50px; height: 50px; margin-bottom: 30px; display: grid; place-items: center; color: #3ee887; border: 1px solid rgba(62,232,135,.17); border-radius: 14px; background: rgba(62,232,135,.07); }
-.securityCopy h2 { margin: 0 0 23px; max-width: 540px; font-size: clamp(38px, 5vw, 58px); line-height: 1.01; letter-spacing: -.06em; font-weight: 470; }
-.securityCopy > span { display: block; max-width: 530px; color: #789398; font-size: 12px; line-height: 1.75; }
-.securityCopy > a { margin-top: 27px; display: inline-flex; align-items: center; gap: 7px; color: #3ee887; text-decoration: none; font-size: 10px; font-weight: 700; }
-.securityGrid { display: grid; grid-template-columns: repeat(2, 1fr); border: 1px solid #154650; border-radius: 17px; overflow: hidden; background: #052732; }
-.securityGrid > div { min-height: 185px; padding: 27px; display: flex; flex-direction: column; align-items: flex-start; border-right: 1px solid #123e48; border-bottom: 1px solid #123e48; }
-.securityGrid > div:nth-child(2n) { border-right: 0; }
-.securityGrid > div:nth-last-child(-n+2) { border-bottom: 0; }
-.securityGrid svg { color: #3ee887; }
-.securityGrid strong { margin-top: 30px; font-size: 12px; }
-.securityGrid small { margin-top: 8px; color: #69868c; font-size: 9px; line-height: 1.55; }
-
 .finalCta { position: relative; z-index: 2; width: min(1180px, calc(100% - 48px)); min-height: 460px; margin: 0 auto 80px; padding: 75px 30px; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; border: 1px solid #174a55; border-radius: 20px; background: radial-gradient(circle at 50% 130%, rgba(62,232,135,.13), transparent 28rem), linear-gradient(145deg, #072e39, #04252f); box-shadow: 0 35px 90px rgba(0,7,11,.28); }
 .finalCta :global(.argus-mark) { width: 52px; height: 52px; margin-bottom: 24px; border-radius: 15px; }
 .finalCta > p { margin-bottom: 15px; }
@@ -271,7 +258,6 @@
   .previewBody { grid-template-columns: 180px minmax(420px, 1fr); }
   .previewActivity { display: none; }
   .featureCard { padding: 25px; }
-  .security { gap: 50px; }
 }
 
 @media (max-width: 820px) {
@@ -292,10 +278,6 @@
   .featureCard { min-height: 250px; }
   .steps { grid-template-columns: 1fr; }
   .steps article { min-height: 160px; border-right: 0; border-bottom: 1px solid #123d48; }
-  .security { grid-template-columns: 1fr; padding: 120px 0; }
-  .securityCopy { text-align: center; }
-  .securityMark { margin-inline: auto; }
-  .securityCopy h2, .securityCopy > span { margin-inline: auto; }
   .footer { grid-template-columns: 1fr auto; }
   .footer p { display: none; }
 }
@@ -321,10 +303,6 @@
   .workflow .sectionIntro { text-align: left; }
   .steps { margin-top: 35px; }
   .steps article { padding: 28px 8px; }
-  .security { gap: 60px; }
-  .securityGrid { grid-template-columns: 1fr; }
-  .securityGrid > div { min-height: 160px; border-right: 0; border-bottom: 1px solid #123e48 !important; }
-  .securityGrid > div:last-child { border-bottom: 0 !important; }
   .finalCta { width: min(100% - 32px, 1180px); min-height: 430px; padding-inline: 22px; }
   .footer { width: min(100% - 32px, 1180px); min-height: 140px; grid-template-columns: 1fr; justify-items: center; gap: 16px; padding-block: 25px; }
   .footer > div { justify-self: center; }
