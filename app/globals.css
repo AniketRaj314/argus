@@ -60,11 +60,22 @@ button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px s
 .top-actions { display: flex; align-items: center; justify-content: flex-end; gap: 12px; }
 .secure-pill { color: #8eb0b3; font-size: 11px; border: 1px solid var(--line); background: rgba(7, 43, 53, .72); padding: 8px 10px; border-radius: 999px; display: flex; gap: 6px; align-items: center; }
 .secure-pill svg { color: var(--mint); }
-.profile-chip { display: flex; align-items: center; gap: 9px; }
+.profile-menu-wrap { position: relative; }
+.profile-chip { min-height: 44px; padding: 4px 7px 4px 4px; border: 1px solid transparent; border-radius: 12px; background: transparent; display: flex; align-items: center; gap: 9px; text-align: left; transition: .16s ease; }
+.profile-chip:hover, .profile-chip[aria-expanded="true"] { border-color: var(--line); background: #062a35; }
 .profile-chip > span, .person-cell > span { width: 34px; height: 34px; display: grid; place-items: center; background: linear-gradient(145deg, #174757, #0a303b); border: 1px solid #215161; color: #c8f4e4; border-radius: 50%; font-size: 11px; font-weight: 750; }
-.profile-chip div { display: grid; }
+.profile-chip > .profile-copy { width: auto; height: auto; display: grid; place-items: initial; border: 0; border-radius: 0; background: transparent; }
 .profile-chip strong { font-size: 12px; }
 .profile-chip small { color: var(--muted); font-size: 10px; margin-top: 2px; }
+.profile-chip > svg { color: #57757c; transition: transform .16s ease; }
+.profile-chip[aria-expanded="true"] > svg { transform: rotate(180deg); color: var(--mint); }
+.profile-menu { position: absolute; z-index: 65; top: calc(100% + 7px); right: 0; width: 220px; padding: 6px; display: grid; gap: 2px; border: 1px solid #1b4b57; border-radius: 12px; background: linear-gradient(145deg, #072d38, #052630); box-shadow: 0 22px 58px rgba(0, 7, 11, .48); }
+.profile-menu > div { padding: 10px 10px 11px; display: grid; gap: 3px; border-bottom: 1px solid var(--line-soft); margin-bottom: 3px; }
+.profile-menu > div strong { font-size: 10px; }
+.profile-menu > div small { color: var(--muted-2); font-size: 8px; overflow: hidden; text-overflow: ellipsis; }
+.profile-menu > button { min-height: 36px; padding: 0 9px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 8px; color: #9db5b8; background: transparent; font-size: 10px; text-align: left; }
+.profile-menu > button:hover { color: white; background: #0a3743; }
+.profile-menu > button svg { color: #6f9299; }
 .icon-button { width: 38px; height: 38px; border: 0; border-radius: 10px; display: inline-grid; place-items: center; color: #8ba5ac; background: transparent; transition: .18s ease; }
 .icon-button:hover { color: white; background: #0a3340; }
 .icon-button.bordered { border: 1px solid var(--line); background: rgba(7, 42, 53, .72); }
@@ -357,6 +368,9 @@ tbody tr:hover { background: rgba(11, 53, 65, .48); }
 .currency-input input { padding-left: 28px; }
 .budget-fields > p { margin: 0; display: flex; align-items: flex-start; gap: 6px; color: #66858c; font-size: 8px; line-height: 1.45; }
 .budget-fields > p svg { flex: 0 0 auto; color: var(--warning); }
+.show-passwords { grid-template-columns: 20px 1fr !important; align-items: center; position: relative; cursor: pointer; }
+.show-passwords > input { position: absolute; opacity: 0; pointer-events: none; }
+.show-passwords > span:last-child { color: #819ba1; font-size: 9px; }
 .confirm-delete { display: flex; flex-direction: column; align-items: center; text-align: center; padding: 5px 12px 8px; }
 .danger-icon { width: 46px; height: 46px; display: grid; place-items: center; color: var(--danger); background: rgba(116, 27, 45, .3); border: 1px solid rgba(255, 113, 132, .26); border-radius: 13px; }
 .confirm-delete > p { margin: 13px 0 3px; color: #c8d8d9; font-size: 13px; }
@@ -421,7 +435,8 @@ tbody tr:hover { background: rgba(11, 53, 65, .48); }
   .main-nav { position: absolute; top: 64px; left: 16px; right: 16px; display: none; padding: 9px; box-shadow: 0 20px 50px rgba(0,0,0,.45); }
   .main-nav.open { display: grid; grid-template-columns: repeat(2, 1fr); }
   .main-nav button { justify-content: center; }
-  .profile-chip div, .top-actions > .icon-button { display: none; }
+  .profile-copy, .profile-chip > svg { display: none !important; }
+  .profile-chip { padding: 3px; }
   .content { width: calc(100% - 30px); padding-top: 28px; }
   .overview-grid { grid-template-columns: 1fr; }
   .left-rail { grid-template-columns: 1fr 1fr; }

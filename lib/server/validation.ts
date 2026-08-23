@@ -12,6 +12,15 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(128),
 });
 
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1).max(128),
+  newPassword: password,
+  confirmPassword: z.string().min(1).max(128),
+}).refine((value) => value.newPassword === value.confirmPassword, {
+  message: "New password confirmation does not match.",
+  path: ["confirmPassword"],
+});
+
 export const setupSchema = z.object({
   email: z.string().email().max(254),
   displayName: z.string().trim().min(2).max(80),

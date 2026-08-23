@@ -8,6 +8,7 @@ ARGUS is an out-of-band monitoring dashboard. It reads organization Usage and Co
 
 - First-run root setup and a dedicated login screen
 - Root and user roles with server-enforced authorization
+- Self-service password changes with current-password verification and full session invalidation
 - Multiple tracked keys per account; root users see every active tracked key
 - Optional lifetime per-account credit allocations with consumption, remaining credit, warning, and exceeded states
 - 7-day, 30-day, and all-time spend charts, input/output/cached token totals, request counts, model distribution, service mix, per-key rollups, and recent usage

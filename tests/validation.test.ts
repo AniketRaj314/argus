@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { createAccountSchema, updateAccountSchema } from "../lib/server/validation";
+import { changePasswordSchema, createAccountSchema, updateAccountSchema } from "../lib/server/validation";
 
 test("account creation accepts an initial set of key assignments", () => {
   const parsed = createAccountSchema.parse({
@@ -38,4 +38,14 @@ test("account creation accepts a total credit allocation in integer cents", () =
 test("account updates can change or remove a total credit allocation", () => {
   assert.equal(updateAccountSchema.parse({ creditLimitCents: 5_000 }).creditLimitCents, 5_000);
   assert.equal(updateAccountSchema.parse({ creditLimitCents: null }).creditLimitCents, null);
+});
+
+test("password changes require a strong matching replacement", () => {
+  const parsed = changePasswordSchema.parse({
+    currentPassword: "CurrentPassword123", newPassword: "ReplacementPassword456", confirmPassword: "ReplacementPassword456",
+  });
+  assert.equal(parsed.newPassword, "ReplacementPassword456");
+  assert.throws(() => changePasswordSchema.parse({
+    currentPassword: "CurrentPassword123", newPassword: "ReplacementPassword456", confirmPassword: "DifferentPassword789",
+  }), /confirmation does not match/i);
 });

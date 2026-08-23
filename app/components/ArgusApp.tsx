@@ -131,6 +131,8 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
   const [visibleKeys, setVisibleKeys] = useState(initial.keys ?? []);
   const [tab, setTab] = useState<Tab>("overview");
   const [mobileNav, setMobileNav] = useState(false);
+  const [profileMenu, setProfileMenu] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(false);
   const [range, setRange] = useState<RangeOption>(30);
   const [selectedKey, setSelectedKey] = useState("all");
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -189,8 +191,10 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
       </nav>
       <div className="top-actions">
         <span className="secure-pill"><ShieldCheck size={14} /> Secure</span>
-        <div className="profile-chip"><span>{initials(account.displayName)}</span><div><strong>{account.displayName}</strong><small>{account.role === "root" ? "Root access" : "Member"}</small></div></div>
-        <button className="icon-button" aria-label="Sign out" onClick={logout}><LogOut size={18} /></button>
+        <div className="profile-menu-wrap" onBlur={(event) => { if (!event.currentTarget.contains(event.relatedTarget)) setProfileMenu(false); }}>
+          <button type="button" className="profile-chip" aria-label="Open account menu" aria-haspopup="menu" aria-expanded={profileMenu} onClick={() => setProfileMenu((open) => !open)}><span>{initials(account.displayName)}</span><span className="profile-copy"><strong>{account.displayName}</strong><small>{account.role === "root" ? "Root access" : "Member"}</small></span><ChevronDown size={15} /></button>
+          {profileMenu && <div className="profile-menu" role="menu"><div><strong>{account.displayName}</strong><small>{account.email}</small></div><button role="menuitem" onClick={() => { setProfileMenu(false); setPasswordOpen(true); }}><LockKeyhole size={15} /> Change password</button><button role="menuitem" onClick={() => { setProfileMenu(false); void logout(); }}><LogOut size={15} /> Sign out</button></div>}
+        </div>
       </div>
     </header>
     <main className="content">
@@ -201,6 +205,7 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
       {tab === "accounts" && account.role === "root" && <AdminAccounts csrfToken={csrfToken} onChanged={() => setAdminVersion((value) => value + 1)} />}
       {tab === "audit" && account.role === "root" && <AuditTrail />}
     </main>
+    {passwordOpen && <ChangePasswordModal csrfToken={csrfToken} onClose={() => setPasswordOpen(false)} onChanged={() => { setPasswordOpen(false); onSignedOut(); }} />}
   </div>;
 }
 
@@ -486,6 +491,26 @@ function BudgetFields({ enabled, dollars, onEnabled, onDollars }: { enabled: boo
     {enabled && <label>Total limit (USD)<div className="currency-input"><span>$</span><input name="creditLimitUsd" inputMode="decimal" type="number" min="1" max="1000000" step="0.01" required value={dollars} onChange={(event) => onDollars(event.target.value)} /></div></label>}
     <p><TriangleAlert size={13} /> ARGUS reports approaching or exceeded limits. It does not interrupt OpenAI requests.</p>
   </fieldset>;
+}
+
+function ChangePasswordModal({ csrfToken, onClose, onChanged }: { csrfToken: string; onClose: () => void; onChanged: () => void }) {
+  const [visible, setVisible] = useState(false);
+  async function changePassword(values: Record<string, FormDataEntryValue>) {
+    const currentPassword = String(values.currentPassword ?? "");
+    const newPassword = String(values.newPassword ?? "");
+    const confirmPassword = String(values.confirmPassword ?? "");
+    if (newPassword !== confirmPassword) throw new Error("New password confirmation does not match.");
+    await requestJson("/api/auth/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword, confirmPassword }) }, csrfToken);
+    onChanged();
+  }
+  return <FormModal title="Change your password" submitLabel="Change password" onClose={onClose} onSubmit={changePassword}>
+    <p className="modal-subtitle">Enter your current password, then choose a new one. You’ll sign in again when the change is complete.</p>
+    <label>Current password<input name="currentPassword" type={visible ? "text" : "password"} autoComplete="current-password" required /></label>
+    <label>New password<input name="newPassword" type={visible ? "text" : "password"} autoComplete="new-password" minLength={12} required placeholder="12+ characters" /></label>
+    <label>Confirm new password<input name="confirmPassword" type={visible ? "text" : "password"} autoComplete="new-password" minLength={12} required /></label>
+    <label className="show-passwords"><input type="checkbox" checked={visible} onChange={(event) => setVisible(event.target.checked)} /><span className="fake-check">{visible && <Check size={13} />}</span><span>Show passwords</span></label>
+    <p className="modal-note"><ShieldCheck size={15} /> Use at least 12 characters with uppercase, lowercase, and a number. All active sessions will be signed out.</p>
+  </FormModal>;
 }
 
 function AccountBudget({ account, loading }: { account: Account; loading: boolean }) {
