@@ -1,0 +1,39 @@
+.page { min-height: 100vh; padding: 7vh 20px; display: grid; place-items: center; position: relative; overflow: hidden; background: radial-gradient(circle at 18% 10%, rgba(62, 232, 135, .1), transparent 28rem), radial-gradient(circle at 88% 95%, rgba(104, 166, 255, .09), transparent 32rem), #021720; }
+.grid { position: absolute; inset: 0; background: radial-gradient(circle, rgba(52, 139, 146, .23) 1px, transparent 1.3px) 0 0 / 46px 46px; mask-image: linear-gradient(to bottom, black, transparent 90%); pointer-events: none; }
+.card { width: min(760px, 100%); position: relative; border: 1px solid #16434e; border-radius: 22px; overflow: hidden; background: linear-gradient(145deg, rgba(7, 44, 56, .98), rgba(4, 31, 41, .99)); box-shadow: 0 35px 110px rgba(0, 8, 13, .46); }
+.header { height: 80px; padding: 0 25px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid #103943; }
+.wordmark { display: flex; align-items: center; gap: 11px; color: #eff9f6; text-decoration: none; font-size: 16px; font-weight: 780; letter-spacing: .2em; }
+.version { padding: 7px 10px; color: #8aa6ac; border: 1px solid #174653; border-radius: 999px; background: #052731; font: 650 10px var(--font-geist-mono), monospace; }
+.hero { padding: 48px 28px 40px; display: flex; flex-direction: column; align-items: center; text-align: center; border-bottom: 1px solid #103943; }
+.statusIcon { width: 54px; height: 54px; display: grid; place-items: center; border: 1px solid rgba(62, 232, 135, .3); border-radius: 17px; background: rgba(62, 232, 135, .08); box-shadow: 0 0 34px rgba(62, 232, 135, .09); }
+.statusIcon i { width: 13px; height: 13px; border: 3px solid #06291f; border-radius: 50%; background: #3ee887; box-shadow: 0 0 0 5px rgba(62, 232, 135, .13), 0 0 18px rgba(62, 232, 135, .55); }
+.statusIcon.degraded { border-color: rgba(251, 173, 79, .35); background: rgba(251, 173, 79, .08); }
+.statusIcon.degraded i { background: #fbad4f; box-shadow: 0 0 0 5px rgba(251, 173, 79, .12), 0 0 18px rgba(251, 173, 79, .48); }
+.hero > p { margin: 18px 0 0; color: #6d9199; font-size: 9px; font-weight: 760; letter-spacing: .16em; }
+.hero h1 { margin: 8px 0 8px; font-size: clamp(28px, 5vw, 43px); letter-spacing: -.055em; }
+.hero > span:last-child { color: #78959b; font-size: 12px; line-height: 1.6; }
+.checks { padding: 13px; display: grid; gap: 7px; border-bottom: 1px solid #103943; }
+.check { min-height: 64px; padding: 10px 13px; display: grid; grid-template-columns: 9px 1fr auto; align-items: center; gap: 12px; border: 1px solid #103b46; border-radius: 11px; background: #052630; }
+.goodDot, .neutralDot, .badDot { width: 7px; height: 7px; border-radius: 50%; background: #3ee887; box-shadow: 0 0 12px rgba(62, 232, 135, .44); }
+.neutralDot { background: #68a6ff; box-shadow: 0 0 12px rgba(104, 166, 255, .4); }
+.badDot { background: #ff7184; box-shadow: 0 0 12px rgba(255, 113, 132, .42); }
+.check > div { display: grid; gap: 3px; }
+.check strong { font-size: 11px; }
+.check small { color: #5f7e85; font-size: 9px; }
+.check > b { color: #91afb2; font-size: 9px; letter-spacing: .08em; text-transform: uppercase; }
+.meta { margin: 0; padding: 22px 26px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px 14px; border-bottom: 1px solid #103943; }
+.meta div { display: grid; gap: 5px; }
+.meta dt { color: #59777f; font-size: 8px; font-weight: 740; letter-spacing: .12em; text-transform: uppercase; }
+.meta dd { margin: 0; color: #a8bfc1; font: 580 10px var(--font-geist-mono), monospace; }
+.footer { min-height: 72px; padding: 15px 25px; display: flex; align-items: center; justify-content: space-between; gap: 18px; }
+.footer span { color: #58767d; font-size: 9px; }
+.footer a { color: #bde8d5; font-size: 10px; font-weight: 680; text-decoration: none; white-space: nowrap; }
+.footer b { margin-left: 5px; color: #3ee887; }
+
+@media (max-width: 600px) {
+  .page { padding: 18px 12px; }
+  .header { height: 70px; padding-inline: 17px; }
+  .hero { padding: 38px 18px 32px; }
+  .meta { grid-template-columns: repeat(2, 1fr); padding-inline: 18px; }
+  .footer { align-items: flex-start; flex-direction: column; padding: 18px; }
+}

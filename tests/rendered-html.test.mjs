@@ -73,3 +73,19 @@ test("client code does not read runtime environment variables", async () => {
   const envExample = await readFile(new URL("../.env.example", import.meta.url), "utf8");
   assert.doesNotMatch(envExample, /^(?:VITE_|NEXT_PUBLIC_)[A-Z0-9_]*=/m);
 });
+
+test("health page and probe expose safe release status", async () => {
+  const page = await fetch(`${origin}/health`);
+  assert.equal(page.status, 200);
+  const html = await page.text();
+  assert.match(html, /System status/i);
+  assert.match(html, /v(?:<!-- -->)?0\.2\.0/);
+  assert.doesNotMatch(html, /DATABASE_URL|OPENAI_ADMIN_KEY|ARGUS_PASSWORD_PEPPER|postgresql:\/\//);
+
+  const probe = await fetch(`${origin}/api/health`);
+  assert.ok([200, 503].includes(probe.status));
+  const body = await probe.json();
+  assert.equal(body.version, "0.2.0");
+  assert.ok(["operational", "degraded"].includes(body.status));
+  assert.equal(typeof body.responseTimeMs, "number");
+});

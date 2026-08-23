@@ -6,11 +6,12 @@ import {
   LockKeyhole, LogOut, Menu, MoreHorizontal, Plus, RefreshCcw, Search, ShieldCheck,
   Sparkles, Trash2, Users, X, Zap,
 } from "lucide-react";
-import { FormEvent, ReactNode, useCallback, useEffect, useRef, useState } from "react";
+import { FormEvent, KeyboardEvent as ReactKeyboardEvent, ReactNode, useCallback, useEffect, useId, useRef, useState } from "react";
 import {
   Area, AreaChart, Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip,
   XAxis, YAxis,
 } from "recharts";
+import { ArgusMark } from "./ArgusLogo";
 
 type Account = {
   id: string; email: string; displayName: string; role: "root" | "user";
@@ -133,22 +134,35 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [adminVersion, setAdminVersion] = useState(0);
+  const [refreshVersion, setRefreshVersion] = useState(0);
 
   const refreshBootstrap = useCallback(async () => {
     const data = await requestJson<Bootstrap>("/api/bootstrap");
-    setCsrfToken(data.csrfToken ?? ""); setVisibleKeys(data.keys ?? []);
+    const nextKeys = data.keys ?? [];
+    setCsrfToken(data.csrfToken ?? ""); setVisibleKeys(nextKeys);
+    setSelectedKey((current) => current === "all" || nextKeys.some((key) => key.id === current) ? current : "all");
   }, []);
-  const loadDashboard = useCallback(async () => {
+  const loadDashboard = useCallback(async (signal?: AbortSignal) => {
     setLoading(true); setError("");
     try {
       const query = new URLSearchParams({ range: String(range) });
       if (selectedKey !== "all") query.set("key", selectedKey);
-      setDashboard(await requestJson<Dashboard>(`/api/dashboard?${query}`));
-    } catch (reason) { setError(reason instanceof Error ? reason.message : "Usage could not be loaded."); }
-    finally { setLoading(false); }
+      setDashboard(await requestJson<Dashboard>(`/api/dashboard?${query}`, { signal }));
+    } catch (reason) {
+      if (!signal?.aborted) setError(reason instanceof Error ? reason.message : "Usage could not be loaded.");
+    } finally { if (!signal?.aborted) setLoading(false); }
   }, [range, selectedKey]);
-  // eslint-disable-next-line react-hooks/set-state-in-effect
-  useEffect(() => { void loadDashboard(); }, [loadDashboard, adminVersion]);
+  useEffect(() => {
+    const controller = new AbortController();
+    // This request synchronizes dashboard state with the selected server query.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    void loadDashboard(controller.signal);
+    return () => controller.abort();
+  }, [loadDashboard, adminVersion, refreshVersion]);
+
+  function selectRange(value: RangeOption) { if (value !== range) { setLoading(true); setRange(value); } }
+  function selectKey(value: string) { if (value !== selectedKey) { setLoading(true); setSelectedKey(value); } }
+  function refreshDashboard() { setLoading(true); setRefreshVersion((value) => value + 1); }
 
   async function logout() {
     try { await requestJson("/api/auth/logout", { method: "POST" }, csrfToken); onSignedOut(); }
@@ -163,6 +177,7 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
     ] : []),
   ];
   return <div className="app-shell">
+    <div className={tab === "overview" && loading ? "shell-progress visible" : "shell-progress"} role="progressbar" aria-label="Loading ARGUS data" aria-hidden={tab !== "overview" || !loading}><span /></div>
     <header className="topbar">
       <button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav((value) => !value)}><Menu size={20} /></button>
       <div className="wordmark"><ArgusMark /><span>ARGUS</span><small>API USAGE INTELLIGENCE</small></div>
@@ -176,7 +191,7 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
       </div>
     </header>
     <main className="content">
-      {tab === "overview" && <Overview dashboard={dashboard} loading={loading} error={error} keys={visibleKeys} range={range} selectedKey={selectedKey} onRange={setRange} onKey={setSelectedKey} onRetry={loadDashboard} />}
+      {tab === "overview" && <Overview dashboard={dashboard} loading={loading} error={error} keys={visibleKeys} range={range} selectedKey={selectedKey} onRange={selectRange} onKey={selectKey} onRetry={refreshDashboard} />}
       {tab === "keys" && (account.role === "root"
         ? <AdminKeys csrfToken={csrfToken} onChanged={async () => { await refreshBootstrap(); setAdminVersion((value) => value + 1); }} />
         : <MemberKeys keys={dashboard?.keys ?? []} loading={loading} />)}
@@ -192,18 +207,20 @@ function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange
 }) {
   const spendChange = dashboard?.summary.previousSpend ? ((dashboard.summary.totalSpend - dashboard.summary.previousSpend) / dashboard.summary.previousSpend) * 100 : null;
   const totalTokens = (dashboard?.summary.inputTokens ?? 0) + (dashboard?.summary.outputTokens ?? 0);
+  const loadingScope = selectedKey === "all" ? "all visible keys" : keys.find((key) => key.id === selectedKey)?.label ?? "selected key";
   return <>
     <div className="page-heading">
       <div><p className="eyebrow">WATCHTOWER / OVERVIEW</p><h1>Good {dayPeriod()}, <span>here’s the signal.</span></h1><p>Organization usage, scoped to the keys you’re allowed to see.</p></div>
       <div className="filter-row">
-        <label className="select-control"><KeyRound size={15} /><select aria-label="Tracked key" value={selectedKey} onChange={(event) => onKey(event.target.value)}><option value="all">All visible keys</option>{keys.map((key) => <option key={key.id} value={key.id}>{key.label}</option>)}</select><ChevronDown size={15} /></label>
+        <WatchScopePicker keys={keys} value={selectedKey} loading={loading} onChange={onKey} />
         <div className="range-switch" aria-label="Date range">{([{ value: 7, label: "7D" }, { value: 30, label: "30D" }, { value: "all", label: "ALL" }] as Array<{ value: RangeOption; label: string }>).map((option) => <button key={option.label} onClick={() => onRange(option.value)} className={range === option.value ? "active" : ""}>{option.label}</button>)}</div>
         <button className="icon-button bordered" aria-label="Refresh usage" onClick={onRetry}><RefreshCcw className={loading ? "spin" : ""} size={17} /></button>
       </div>
     </div>
+    {loading && dashboard && <div className="data-loading" role="status"><LoaderCircle className="spin" size={16} /><span>Loading usage for <strong>{loadingScope}</strong>…</span></div>}
     {error ? <section className="error-card"><Activity /><div><strong>Usage feed unavailable</strong><p>{error}</p></div><button className="button secondary" onClick={onRetry}>Retry</button></section> : null}
     {dashboard?.notices.map((notice) => <div className="notice" key={notice}><Sparkles size={15} />{notice}</div>)}
-    {loading && !dashboard ? <DashboardSkeleton /> : dashboard?.source === "empty" ? <EmptyOverview /> : dashboard && <div className="overview-grid">
+    {loading && !dashboard ? <DashboardSkeleton /> : dashboard?.source === "empty" ? <EmptyOverview /> : dashboard && <div className={loading ? "overview-grid refreshing" : "overview-grid"} aria-busy={loading}>
       <aside className="left-rail">
         <section className="panel key-scope-panel">
           <PanelTitle icon={<KeyRound size={17} />} title="Key watchlist" action={`${dashboard.summary.activeKeys}/${dashboard.keys.length} active`} />
@@ -236,6 +253,91 @@ function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange
       </aside>
     </div>}
   </>;
+}
+
+function WatchScopePicker({ keys, value, loading, onChange }: {
+  keys: TrackedKey[]; value: string; loading: boolean; onChange: (value: string) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const pickerRef = useRef<HTMLDivElement>(null);
+  const listboxId = useId();
+  const selected = keys.find((key) => key.id === value);
+
+  useEffect(() => {
+    function closeOnOutsideClick(event: MouseEvent) {
+      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false);
+    }
+    document.addEventListener("mousedown", closeOnOutsideClick);
+    return () => document.removeEventListener("mousedown", closeOnOutsideClick);
+  }, []);
+  useEffect(() => {
+    if (open) pickerRef.current?.querySelector<HTMLButtonElement>("[role='option'][aria-selected='true']")?.focus();
+  }, [open]);
+
+  function choose(nextValue: string) {
+    onChange(nextValue);
+    setOpen(false);
+  }
+
+  function handleKeyDown(event: ReactKeyboardEvent<HTMLButtonElement>) {
+    if (event.key === "Escape") setOpen(false);
+    if (event.key === "ArrowDown" && !open) { event.preventDefault(); setOpen(true); }
+  }
+
+  function navigateOptions(event: ReactKeyboardEvent<HTMLDivElement>) {
+    if (event.key === "Escape") {
+      event.preventDefault(); setOpen(false);
+      pickerRef.current?.querySelector<HTMLButtonElement>(".scope-trigger")?.focus();
+      return;
+    }
+    if (event.key !== "ArrowDown" && event.key !== "ArrowUp") return;
+    event.preventDefault();
+    const options = Array.from(pickerRef.current?.querySelectorAll<HTMLButtonElement>("[role='option']") ?? []);
+    const current = options.indexOf(document.activeElement as HTMLButtonElement);
+    const next = event.key === "ArrowDown" ? (current + 1) % options.length : (current - 1 + options.length) % options.length;
+    options[next]?.focus();
+  }
+
+  return <div className={open ? "scope-picker open" : "scope-picker"} ref={pickerRef}>
+    <button
+      type="button"
+      className="scope-trigger"
+      aria-label="Choose tracked key scope"
+      aria-haspopup="listbox"
+      aria-expanded={open}
+      aria-controls={listboxId}
+      onClick={() => setOpen((current) => !current)}
+      onKeyDown={handleKeyDown}
+    >
+      <span className="scope-trigger-icon">{loading ? <LoaderCircle className="spin" size={16} /> : <KeyRound size={16} />}</span>
+      <span className="scope-trigger-copy">
+        <small>WATCH SCOPE</small>
+        <strong>{selected?.label ?? "All visible keys"}</strong>
+      </span>
+      <span className="scope-trigger-meta">{selected ? maskKey(selected.keyId) : `${keys.length} ${keys.length === 1 ? "key" : "keys"}`}</span>
+      <ChevronDown className="scope-chevron" size={16} />
+    </button>
+    {open && <div className="scope-menu" id={listboxId} role="listbox" aria-label="Tracked key scope" tabIndex={-1} onKeyDown={navigateOptions}>
+      <div className="scope-menu-head">
+        <span><span className="live-dot" /> SIGNAL SOURCE</span>
+        <small>{keys.length} IN VIEW</small>
+      </div>
+      <button type="button" role="option" aria-selected={value === "all"} className={value === "all" ? "scope-option active" : "scope-option"} onClick={() => choose("all")}>
+        <span className="scope-all-icon"><Layers3 size={16} /></span>
+        <span><strong>All visible keys</strong><small>Combined organization signal</small></span>
+        {value === "all" && <span className="scope-check"><Check size={13} /></span>}
+      </button>
+      {keys.length > 0 && <div className="scope-divider"><span>INDIVIDUAL KEYS</span></div>}
+      <div className="scope-options">
+        {keys.map((key, index) => <button type="button" role="option" aria-selected={value === key.id} className={value === key.id ? "scope-option active" : "scope-option"} key={key.id} onClick={() => choose(key.id)}>
+          <span className="key-sigil" style={{ "--sigil": modelColors[index % modelColors.length] } as React.CSSProperties}>{key.label.slice(0, 1).toUpperCase()}</span>
+          <span><strong>{key.label}</strong><small>{maskKey(key.keyId)}</small></span>
+          {value === key.id ? <span className="scope-check"><Check size={13} /></span> : <span className="scope-pulse" />}
+        </button>)}
+      </div>
+      {!keys.length && <div className="scope-menu-empty"><KeyRound size={17} /><span>No tracked keys in view</span></div>}
+    </div>}
+  </div>;
 }
 
 function AdminKeys({ csrfToken, onChanged }: { csrfToken: string; onChanged: () => Promise<void> }) {
@@ -358,7 +460,6 @@ function DashboardSkeleton() { return <div className="dashboard-skeleton"><div /
 function CardSkeleton({ count }: { count: number }) { return <>{Array.from({ length: count }, (_, index) => <div className="skeleton-card" key={index} />)}</>; }
 function TableSkeleton({ columns }: { columns: number }) { return <>{Array.from({ length: 4 }, (_, row) => <tr key={row}>{Array.from({ length: columns }, (_, col) => <td key={col}><span className="skeleton-line" /></td>)}</tr>)}</>; }
 function EmptyOverview() { return <section className="empty-overview"><div className="empty-icon"><KeyRound /></div><p className="eyebrow">NO KEYS IN VIEW</p><h2>The watchlist is empty.</h2><p>Add a tracked API Key ID, or ask a root user to assign one to your account.</p></section>; }
-function ArgusMark() { return <span className="argus-mark" aria-hidden="true"><span /><span /><i /></span>; }
 function ServiceGlyph({ name }: { name: string }) { return name.includes("Completion") ? <Zap size={16} /> : name.includes("Embedding") ? <Layers3 size={16} /> : name.includes("search") ? <Search size={16} /> : <Sparkles size={16} />; }
 function AuditGlyph({ action }: { action: string }) { return action.includes("login") ? <ShieldCheck size={16} /> : action.includes("key") ? <KeyRound size={16} /> : <Users size={16} />; }
 function SpendTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ value: number }>; label?: string }) { if (!active || !payload?.length) return null; return <div className="chart-tooltip"><small>{label}</small><strong>{money.format(payload[0].value)}</strong></div>; }

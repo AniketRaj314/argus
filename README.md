@@ -12,6 +12,7 @@ ARGUS is an out-of-band monitoring dashboard. It reads organization Usage and Co
 - 7-day, 30-day, and all-time spend charts, input/output/cached token totals, request counts, model distribution, service mix, per-key rollups, and recent usage
 - Root account, automatic OpenAI project-key sync, manual tracked-key fallback, assignment, and audit-trail screens
 - Responsive dark navy/teal UI with loading, empty, partial-data, and error states
+- Public, secret-safe `/health` status page and `/api/health` probe with release metadata
 - Server-only OpenAI Usage and Costs integration with cursor pagination and timeouts
 - Local demo mode for UI development without an OpenAI credential
 
@@ -139,7 +140,9 @@ Import the Git repository as a Next.js project and add `DATABASE_URL`, `ARGUS_AP
 
 ### Railway
 
-Create a service from the Git repository. Railway detects Next.js and uses `npm run build` plus `npm start`. Add the same server-only variables to the service, set `ARGUS_APP_ORIGIN` to the final HTTPS domain, generate a public domain, then complete root setup at that URL. A Railway PostgreSQL service is also compatible if `DATABASE_URL` points to it.
+Create a service from the Git repository. Railway detects Next.js and uses `npm run build` plus `npm start`. Add the same server-only variables to the service, set `ARGUS_APP_ORIGIN` to the final HTTPS domain, generate a public domain, then complete root setup at that URL. Set Railway's healthcheck path to `/api/health`; it returns `200` only when the application and database are operational. A Railway PostgreSQL service is also compatible if `DATABASE_URL` points to it.
+
+The human-readable `/health` page reports the application version, deployment revision, environment, safe dependency status, and response time. It intentionally exposes no credentials, database addresses, accounts, or API key identifiers.
 
 ## Validation
 
