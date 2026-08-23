@@ -26,6 +26,7 @@ export type DiscoveredOpenAIKey = {
   keyId: string;
   label: string;
   projectId: string;
+  createdAt: number | null;
 };
 
 async function listAll<T>(path: string, adminKey: string, params: Record<string, string> = {}): Promise<T[]> {
@@ -92,6 +93,7 @@ export async function discoverOpenAIProjectKeys(): Promise<{ projects: number; k
         keyId: key.id,
         label: key.name?.trim().slice(0, 80) || `${project.name.slice(0, 68)} API key`,
         projectId: project.id,
+        createdAt: Number.isFinite(key.created_at) ? key.created_at ?? null : null,
       });
     }
   }

@@ -20,7 +20,8 @@ type TrackedKey = { id: string; keyId: string; label: string; projectId: string 
 type Bootstrap = { configured: boolean; authenticated: boolean; csrfToken?: string; account?: Account; keys?: TrackedKey[] };
 type Dashboard = {
   source: "openai" | "demo" | "empty"; generatedAt: number; rangeDays: number;
-  summary: { totalSpend: number; previousSpend: number; inputTokens: number; outputTokens: number; cachedTokens: number; requests: number; activeKeys: number };
+  range: RangeOption; rangeStart: number; granularity: "day" | "month";
+  summary: { totalSpend: number; previousSpend: number | null; inputTokens: number; outputTokens: number; cachedTokens: number; requests: number; activeKeys: number };
   daily: Array<{ timestamp: number; label: string; spend: number; inputTokens: number; outputTokens: number; requests: number }>;
   models: Array<{ name: string; inputTokens: number; outputTokens: number; requests: number; totalTokens: number }>;
   keys: Array<{ id: string; keyId: string; label: string; spend: number; tokens: number; requests: number; lastActiveAt: number | null }>;
@@ -31,10 +32,12 @@ type Dashboard = {
 type AuditEvent = { id: string; action: string; targetType: string; targetId: string | null; metadata: Record<string, unknown>; createdAt: number; actorName: string; actorEmail: string | null };
 type Assignment = { accountId: string; apiKeyId: string; assignedAt: number };
 type Tab = "overview" | "keys" | "accounts" | "audit";
+type RangeOption = 7 | 30 | "all";
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD", minimumFractionDigits: 2 });
 const compact = new Intl.NumberFormat("en-US", { notation: "compact", maximumFractionDigits: 1 });
 const dateTime = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+const dateOnly = new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" });
 const modelColors = ["#3ee887", "#68a6ff", "#a78bfa", "#fbad4f", "#39d6d1", "#f2718b"];
 
 async function requestJson<T>(url: string, init?: RequestInit, csrfToken?: string): Promise<T> {
@@ -124,7 +127,7 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
   const [visibleKeys, setVisibleKeys] = useState(initial.keys ?? []);
   const [tab, setTab] = useState<Tab>("overview");
   const [mobileNav, setMobileNav] = useState(false);
-  const [range, setRange] = useState(30);
+  const [range, setRange] = useState<RangeOption>(30);
   const [selectedKey, setSelectedKey] = useState("all");
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -184,17 +187,17 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
 }
 
 function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange, onKey, onRetry }: {
-  dashboard: Dashboard | null; loading: boolean; error: string; keys: TrackedKey[]; range: number; selectedKey: string;
-  onRange: (range: number) => void; onKey: (key: string) => void; onRetry: () => void;
+  dashboard: Dashboard | null; loading: boolean; error: string; keys: TrackedKey[]; range: RangeOption; selectedKey: string;
+  onRange: (range: RangeOption) => void; onKey: (key: string) => void; onRetry: () => void;
 }) {
-  const spendChange = dashboard?.summary.previousSpend ? ((dashboard.summary.totalSpend - dashboard.summary.previousSpend) / dashboard.summary.previousSpend) * 100 : 0;
+  const spendChange = dashboard?.summary.previousSpend ? ((dashboard.summary.totalSpend - dashboard.summary.previousSpend) / dashboard.summary.previousSpend) * 100 : null;
   const totalTokens = (dashboard?.summary.inputTokens ?? 0) + (dashboard?.summary.outputTokens ?? 0);
   return <>
     <div className="page-heading">
       <div><p className="eyebrow">WATCHTOWER / OVERVIEW</p><h1>Good {dayPeriod()}, <span>here’s the signal.</span></h1><p>Organization usage, scoped to the keys you’re allowed to see.</p></div>
       <div className="filter-row">
         <label className="select-control"><KeyRound size={15} /><select aria-label="Tracked key" value={selectedKey} onChange={(event) => onKey(event.target.value)}><option value="all">All visible keys</option>{keys.map((key) => <option key={key.id} value={key.id}>{key.label}</option>)}</select><ChevronDown size={15} /></label>
-        <div className="range-switch" aria-label="Date range">{[7, 30].map((days) => <button key={days} onClick={() => onRange(days)} className={range === days ? "active" : ""}>{days}D</button>)}</div>
+        <div className="range-switch" aria-label="Date range">{([{ value: 7, label: "7D" }, { value: 30, label: "30D" }, { value: "all", label: "ALL" }] as Array<{ value: RangeOption; label: string }>).map((option) => <button key={option.label} onClick={() => onRange(option.value)} className={range === option.value ? "active" : ""}>{option.label}</button>)}</div>
         <button className="icon-button bordered" aria-label="Refresh usage" onClick={onRetry}><RefreshCcw className={loading ? "spin" : ""} size={17} /></button>
       </div>
     </div>
@@ -215,12 +218,12 @@ function Overview({ dashboard, loading, error, keys, range, selectedKey, onRange
       </aside>
       <section className="center-stage">
         <div className="metric-strip">
-          <MetricCard icon={<CircleDollarSign />} label={`${range}-day spend`} value={money.format(dashboard.summary.totalSpend)} delta={spendChange} />
+          <MetricCard icon={<CircleDollarSign />} label={range === "all" ? "All-time spend" : `${range}-day spend`} value={money.format(dashboard.summary.totalSpend)} delta={spendChange ?? undefined} />
           <MetricCard icon={<Zap />} label="Total tokens" value={compact.format(totalTokens)} sub={`${percent(dashboard.summary.cachedTokens, dashboard.summary.inputTokens)}% cached`} />
           <MetricCard icon={<Activity />} label="API requests" value={compact.format(dashboard.summary.requests)} sub={`${dashboard.summary.activeKeys} active keys`} />
         </div>
         <section className="panel hero-chart">
-          <div className="hero-chart-header"><div><p className="eyebrow">SPEND VELOCITY</p><h2>{money.format(dashboard.summary.totalSpend)}</h2><p className={spendChange <= 0 ? "delta good" : "delta warn"}>{spendChange <= 0 ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}{Math.abs(spendChange).toFixed(1)}% vs previous {range} days</p></div><div className="chart-badge"><BarChart3 size={16} /> DAILY COST</div></div>
+          <div className="hero-chart-header"><div><p className="eyebrow">SPEND VELOCITY</p><h2>{money.format(dashboard.summary.totalSpend)}</h2>{spendChange === null ? <p className="delta"><FileClock size={16} />Since {dateOnly.format(dashboard.rangeStart * 1000)}</p> : <p className={spendChange <= 0 ? "delta good" : "delta warn"}>{spendChange <= 0 ? <ArrowDownRight size={16} /> : <ArrowUpRight size={16} />}{Math.abs(spendChange).toFixed(1)}% vs previous {range} days</p>}</div><div className="chart-badge"><BarChart3 size={16} /> {dashboard.granularity === "month" ? "MONTHLY COST" : "DAILY COST"}</div></div>
           <div className="chart-area"><ResponsiveContainer width="100%" height="100%"><AreaChart data={dashboard.daily} margin={{ top: 12, right: 0, left: -24, bottom: 0 }}><defs><linearGradient id="spendFill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#3ee887" stopOpacity={0.42} /><stop offset="100%" stopColor="#3ee887" stopOpacity={0} /></linearGradient></defs><CartesianGrid vertical={false} stroke="#123b47" strokeDasharray="2 6" /><XAxis dataKey="label" axisLine={false} tickLine={false} tick={{ fill: "#78919a", fontSize: 11 }} minTickGap={28} /><YAxis axisLine={false} tickLine={false} tick={{ fill: "#78919a", fontSize: 11 }} tickFormatter={(value) => `$${value}`} /><Tooltip content={<SpendTooltip />} /><Area type="monotone" dataKey="spend" stroke="#3ee887" strokeWidth={3} fill="url(#spendFill)" activeDot={{ r: 5, fill: "#eafff2", stroke: "#3ee887", strokeWidth: 3 }} /></AreaChart></ResponsiveContainer></div>
         </section>
         <div className="lower-grid">

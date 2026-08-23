@@ -9,7 +9,7 @@ ARGUS is an out-of-band monitoring dashboard. It reads organization Usage and Co
 - First-run root setup and a dedicated login screen
 - Root and user roles with server-enforced authorization
 - Multiple tracked keys per account; root users see every active tracked key
-- 7-day and 30-day spend charts, input/output/cached token totals, request counts, model distribution, service mix, per-key rollups, and recent usage
+- 7-day, 30-day, and all-time spend charts, input/output/cached token totals, request counts, model distribution, service mix, per-key rollups, and recent usage
 - Root account, automatic OpenAI project-key sync, manual tracked-key fallback, assignment, and audit-trail screens
 - Responsive dark navy/teal UI with loading, empty, partial-data, and error states
 - Server-only OpenAI Usage and Costs integration with cursor pagination and timeouts
@@ -17,9 +17,9 @@ ARGUS is an out-of-band monitoring dashboard. It reads organization Usage and Co
 
 ## Stack
 
-- React 19 + Vinext App Router
-- Cloudflare Workers-compatible server runtime
-- Cloudflare D1 / SQLite with Drizzle migrations
+- React 19 + Next.js App Router
+- Standard Node.js runtime for Vercel or Railway
+- PostgreSQL (Neon recommended) with Drizzle migrations
 - Recharts for data visualization
 - Zod for request validation
 - Web Crypto PBKDF2-HMAC-SHA-256 password hashing
@@ -34,7 +34,7 @@ Requirements: Node.js 22.13 or newer.
    npm install
    ```
 
-2. Copy `.env.example` to `.dev.vars` and replace the placeholder values. `.dev.vars` is gitignored and loaded only by the local server.
+2. Copy `.env.example` to `.dev.vars` and replace the placeholder values. `.dev.vars` is gitignored and loaded only by the local development command. `DATABASE_URL` should be a pooled PostgreSQL connection string; if it is omitted locally, ARGUS uses `postgresql://localhost:5432/argus`.
 
    Generate independent setup and pepper values, for example:
 
@@ -64,10 +64,12 @@ Requirements: Node.js 22.13 or newer.
 
 | Variable | Required | Purpose |
 | --- | --- | --- |
+| `DATABASE_URL` | Production | Server-only pooled PostgreSQL connection string. |
 | `OPENAI_ADMIN_KEY` | For live data | Server-only organization Admin key used for Usage and Costs requests. |
 | `ARGUS_SETUP_TOKEN` | First run | One-time value required to create the first root account. |
 | `ARGUS_PASSWORD_PEPPER` | Recommended | Independent server-only value mixed into password hashing. Keep it stable after launch. |
 | `ARGUS_DEMO_MODE` | No | `true` returns deterministic server-generated demo metrics instead of contacting OpenAI. Never enable in production. |
+| `ARGUS_DB_POOL_MAX` | No | Per-instance database connection limit; defaults to 1 on Vercel and 5 elsewhere. |
 
 No ARGUS secret uses a public frontend prefix. The client never reads runtime environment variables.
 
@@ -87,14 +89,14 @@ ARGUS calls the official organization endpoints only from server code:
 - `GET /v1/organization/usage/file_search_calls`
 - `GET /v1/organization/usage/web_search_calls`
 
-Every non-root query begins with the authenticated account's assignments from D1, then sends only those `api_key_ids` to OpenAI. A requested key filter is checked against that same allowlist before any upstream call. Usage categories that cannot be attributed to an API Key ID are deliberately excluded from user totals to prevent cross-account leakage.
+Every non-root query begins with the authenticated account's assignments from PostgreSQL, then sends only those `api_key_ids` to OpenAI. A requested key filter is checked against that same allowlist before any upstream call. Usage categories that cannot be attributed to an API Key ID are deliberately excluded from user totals to prevent cross-account leakage.
 
 Current official references: [Usage API and Costs API example](https://developers.openai.com/cookbook/examples/completions_usage_api), [OpenAI API reference](https://developers.openai.com/api/reference/overview).
 
 ## Security model
 
 - Passwords are salted and hashed with PBKDF2-HMAC-SHA-256 at 600,000 iterations, with an optional server-side pepper.
-- Session tokens are random; CSRF tokens are derived per session, and only SHA-256 hashes are stored in D1. Session cookies are `HttpOnly` and `SameSite=Strict`; production HTTPS adds `Secure`.
+- Session tokens are random; CSRF tokens are derived per session, and only SHA-256 hashes are stored in PostgreSQL. Session cookies are `HttpOnly` and `SameSite=Strict`; production HTTPS adds `Secure`.
 - State-changing requests require an exact same-origin `Origin`, a custom request header, and a session-bound CSRF token.
 - Login attempts are rate-limited per hashed IP + normalized email. Login responses do not reveal whether an email exists.
 - Disabling an account or changing its password invalidates every existing session.
@@ -117,6 +119,26 @@ npm run db:generate
 
 Review the generated SQL before deployment.
 
+## Deploying
+
+ARGUS is a standard Next.js application and uses the same build on Vercel and Railway. Neon is recommended because ARGUS needs plain managed PostgreSQL and Neon provides a pooled connection string suitable for serverless deployments.
+
+### Neon
+
+1. Create a Neon project and open **Connect**.
+2. Enable **Pooled connection** and copy the `postgresql://...-pooler...` URL.
+3. Save it as the server-only `DATABASE_URL`. Never give it a `NEXT_PUBLIC_` prefix.
+
+The application creates missing tables safely on first server request. The checked-in migration can also be applied through your normal migration workflow before the first deployment.
+
+### Vercel
+
+Import the Git repository as a Next.js project and add `DATABASE_URL`, `OPENAI_ADMIN_KEY`, `ARGUS_SETUP_TOKEN`, `ARGUS_PASSWORD_PEPPER`, and `ARGUS_DEMO_MODE=false` under project environment variables. Deploy, visit the production URL, and complete the one-time root setup. Keep Preview and Production on separate databases or Neon branches when preview deployments are enabled.
+
+### Railway
+
+Create a service from the Git repository. Railway detects Next.js and uses `npm run build` plus `npm start`. Add the same server-only variables to the service, generate a public domain, then complete root setup at that HTTPS URL. A Railway PostgreSQL service is also compatible if `DATABASE_URL` points to it.
+
 ## Validation
 
 ```bash
@@ -131,7 +153,7 @@ npm test
 
 1. Set `ARGUS_DEMO_MODE=false` or omit it.
 2. Store all environment values in the hosting provider's encrypted server secret store.
-3. Apply the D1 migrations and confirm database backups/retention.
+3. Apply the PostgreSQL migration (or allow the safe first-request initializer to create the schema) and confirm database backups/retention.
 4. Serve ARGUS only over HTTPS.
 5. Use a long, unique root password and setup token; remove or rotate the setup token after initialization.
 6. Restrict deployment access at the network/provider layer where possible.

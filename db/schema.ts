@@ -1,6 +1,7 @@
-import { index, integer, primaryKey, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
+import { sql } from "drizzle-orm";
+import { check, index, integer, pgTable, primaryKey, text, uniqueIndex } from "drizzle-orm/pg-core";
 
-export const accounts = sqliteTable(
+export const accounts = pgTable(
   "accounts",
   {
     id: text("id").primaryKey(),
@@ -14,10 +15,15 @@ export const accounts = sqliteTable(
     lastLoginAt: integer("last_login_at"),
     passwordChangedAt: integer("password_changed_at").notNull(),
   },
-  (table) => [uniqueIndex("idx_accounts_email").on(table.email)],
+  (table) => [
+    uniqueIndex("idx_accounts_email").on(table.email),
+    uniqueIndex("idx_single_root").on(table.role).where(sql`${table.role} = 'root'`),
+    check("accounts_role_check", sql`${table.role} IN ('root', 'user')`),
+    check("accounts_status_check", sql`${table.status} IN ('active', 'disabled')`),
+  ],
 );
 
-export const apiKeys = sqliteTable(
+export const apiKeys = pgTable(
   "api_keys",
   {
     id: text("id").primaryKey(),
@@ -29,10 +35,13 @@ export const apiKeys = sqliteTable(
     createdAt: integer("created_at").notNull(),
     updatedAt: integer("updated_at").notNull(),
   },
-  (table) => [uniqueIndex("idx_api_keys_key_id").on(table.keyId)],
+  (table) => [
+    uniqueIndex("idx_api_keys_key_id").on(table.keyId),
+    check("api_keys_status_check", sql`${table.status} IN ('active', 'archived')`),
+  ],
 );
 
-export const accountApiKeys = sqliteTable(
+export const accountApiKeys = pgTable(
   "account_api_keys",
   {
     accountId: text("account_id").notNull().references(() => accounts.id, { onDelete: "cascade" }),
@@ -46,7 +55,7 @@ export const accountApiKeys = sqliteTable(
   ],
 );
 
-export const sessions = sqliteTable(
+export const sessions = pgTable(
   "sessions",
   {
     tokenHash: text("token_hash").primaryKey(),
@@ -64,14 +73,14 @@ export const sessions = sqliteTable(
   ],
 );
 
-export const rateLimits = sqliteTable("rate_limits", {
+export const rateLimits = pgTable("rate_limits", {
   key: text("key").primaryKey(),
   attempts: integer("attempts").notNull(),
   windowStartedAt: integer("window_started_at").notNull(),
   blockedUntil: integer("blocked_until"),
 });
 
-export const auditEvents = sqliteTable(
+export const auditEvents = pgTable(
   "audit_events",
   {
     id: text("id").primaryKey(),

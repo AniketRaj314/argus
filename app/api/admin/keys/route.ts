@@ -8,7 +8,7 @@ export async function GET(request: Request) {
   try {
     await requireRoot(request); await ensureSchema();
     const rows = await getDb().prepare(`SELECT k.id, k.key_id, k.label, k.project_id, k.status, k.created_at,
-      GROUP_CONCAT(a.display_name, ' • ') AS assigned_names, COUNT(aak.account_id) AS assignment_count
+      STRING_AGG(a.display_name, ' • ' ORDER BY a.display_name) AS assigned_names, COUNT(aak.account_id) AS assignment_count
       FROM api_keys k
       LEFT JOIN account_api_keys aak ON aak.api_key_id = k.id
       LEFT JOIN accounts a ON a.id = aak.account_id

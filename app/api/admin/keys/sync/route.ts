@@ -24,8 +24,9 @@ export async function POST(request: Request) {
       ON CONFLICT(key_id) DO UPDATE SET
         project_id = excluded.project_id,
         status = 'active',
+        created_at = LEAST(api_keys.created_at, excluded.created_at),
         updated_at = excluded.updated_at`)
-      .bind(randomId("trk"), key.keyId, key.label, key.projectId, root.account.id, now, now));
+      .bind(randomId("trk"), key.keyId, key.label, key.projectId, root.account.id, key.createdAt ?? now, now));
 
     for (let index = 0; index < statements.length; index += 100) {
       await getDb().batch(statements.slice(index, index + 100));

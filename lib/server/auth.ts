@@ -178,16 +178,16 @@ export async function audit(
     .bind(randomId("evt"), actorAccountId, action, targetType, targetId, JSON.stringify(sanitized), await hashClientIp(request), Math.floor(Date.now() / 1000)).run();
 }
 
-export async function getVisibleKeys(account: SafeAccount): Promise<Array<{ id: string; keyId: string; label: string; projectId: string | null }>> {
+export async function getVisibleKeys(account: SafeAccount): Promise<Array<{ id: string; keyId: string; label: string; projectId: string | null; createdAt: number }>> {
   await ensureSchema();
   const db = getDb();
   const result = account.role === "root"
-    ? await db.prepare("SELECT id, key_id, label, project_id FROM api_keys WHERE status = 'active' ORDER BY label").all<{ id: string; key_id: string; label: string; project_id: string | null }>()
-    : await db.prepare(`SELECT k.id, k.key_id, k.label, k.project_id
+    ? await db.prepare("SELECT id, key_id, label, project_id, created_at FROM api_keys WHERE status = 'active' ORDER BY label").all<{ id: string; key_id: string; label: string; project_id: string | null; created_at: number }>()
+    : await db.prepare(`SELECT k.id, k.key_id, k.label, k.project_id, k.created_at
         FROM api_keys k JOIN account_api_keys aak ON aak.api_key_id = k.id
         WHERE aak.account_id = ? AND k.status = 'active' ORDER BY k.label`).bind(account.id)
-      .all<{ id: string; key_id: string; label: string; project_id: string | null }>();
-  return result.results.map((row) => ({ id: row.id, keyId: row.key_id, label: row.label, projectId: row.project_id }));
+      .all<{ id: string; key_id: string; label: string; project_id: string | null; created_at: number }>();
+  return result.results.map((row) => ({ id: row.id, keyId: row.key_id, label: row.label, projectId: row.project_id, createdAt: row.created_at }));
 }
 
 export function passwordPepper(): string {

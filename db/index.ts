@@ -1,21 +1,106 @@
-import { env } from "cloudflare:workers";
+import "server-only";
+import postgres from "postgres";
 
 type RuntimeEnv = {
-  DB?: D1Database;
+  DATABASE_URL?: string;
   OPENAI_ADMIN_KEY?: string;
   ARGUS_SETUP_TOKEN?: string;
   ARGUS_PASSWORD_PEPPER?: string;
   ARGUS_DEMO_MODE?: string;
 };
 
+type QueryExecutor = postgres.Sql | postgres.TransactionSql;
+
 export function getRuntimeEnv(): RuntimeEnv {
-  return env as RuntimeEnv;
+  return {
+    DATABASE_URL: process.env.DATABASE_URL,
+    OPENAI_ADMIN_KEY: process.env.OPENAI_ADMIN_KEY,
+    ARGUS_SETUP_TOKEN: process.env.ARGUS_SETUP_TOKEN,
+    ARGUS_PASSWORD_PEPPER: process.env.ARGUS_PASSWORD_PEPPER,
+    ARGUS_DEMO_MODE: process.env.ARGUS_DEMO_MODE,
+  };
 }
 
-export function getDb(): D1Database {
-  const db = getRuntimeEnv().DB;
-  if (!db) throw new Error("ARGUS database binding is unavailable.");
-  return db;
+function databaseUrl(): string {
+  const configured = process.env.DATABASE_URL?.trim();
+  if (configured) return configured;
+  if (process.env.NODE_ENV !== "production") return "postgresql://localhost:5432/argus";
+  throw new Error("DATABASE_URL is required in production.");
+}
+
+function createClient(): postgres.Sql {
+  const url = databaseUrl();
+  const hostname = new URL(url).hostname;
+  const local = hostname === "localhost" || hostname === "127.0.0.1" || hostname === "::1";
+  return postgres(url, {
+    max: Number(process.env.ARGUS_DB_POOL_MAX ?? (process.env.VERCEL ? 1 : 5)),
+    idle_timeout: 20,
+    connect_timeout: 15,
+    prepare: false,
+    ssl: local ? false : "require",
+  });
+}
+
+const globalDatabase = globalThis as typeof globalThis & { __argusPostgres?: postgres.Sql };
+
+function getClient(): postgres.Sql {
+  if (!globalDatabase.__argusPostgres) globalDatabase.__argusPostgres = createClient();
+  return globalDatabase.__argusPostgres;
+}
+
+function numberedParameters(query: string): string {
+  let parameter = 0;
+  return query.replace(/\?/g, () => `$${++parameter}`);
+}
+
+class PreparedStatement {
+  private values: unknown[] = [];
+
+  constructor(private readonly query: string) {}
+
+  bind(...values: unknown[]): PreparedStatement {
+    this.values = values;
+    return this;
+  }
+
+  private async execute(executor: QueryExecutor = getClient()) {
+    return executor.unsafe(numberedParameters(this.query), this.values as never[]);
+  }
+
+  async first<T>(): Promise<T | null> {
+    const rows = await this.execute();
+    return (rows[0] as T | undefined) ?? null;
+  }
+
+  async all<T>(): Promise<{ results: T[] }> {
+    const rows = await this.execute();
+    return { results: Array.from(rows) as T[] };
+  }
+
+  async run(executor?: QueryExecutor): Promise<{ success: true; meta: { changes: number } }> {
+    const rows = await this.execute(executor);
+    return { success: true, meta: { changes: rows.count ?? rows.length } };
+  }
+}
+
+class ArgusDatabase {
+  prepare(query: string): PreparedStatement {
+    return new PreparedStatement(query);
+  }
+
+  async batch(statements: PreparedStatement[]) {
+    return getClient().begin(async (transaction) => {
+      const results = [];
+      for (const statement of statements) results.push(await statement.run(transaction));
+      return results;
+    });
+  }
+}
+
+const database = new ArgusDatabase();
+
+export function getDb(): ArgusDatabase {
+  return database;
 }
 
 let schemaReady: Promise<void> | null = null;
@@ -87,6 +172,7 @@ async function initializeSchema() {
       ip_hash TEXT,
       created_at INTEGER NOT NULL
     )`),
+    db.prepare("CREATE UNIQUE INDEX IF NOT EXISTS idx_single_root ON accounts ((role)) WHERE role = 'root'"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_account_id ON sessions(account_id)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at)"),
     db.prepare("CREATE INDEX IF NOT EXISTS idx_assignments_account_id ON account_api_keys(account_id)"),

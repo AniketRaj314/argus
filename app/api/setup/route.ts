@@ -18,12 +18,17 @@ export async function POST(request: Request) {
     await ensureSchema();
     const now = Math.floor(Date.now() / 1000);
     const accountId = randomId("acct");
-    const created = await getDb().prepare(`INSERT INTO accounts
-      (id, email, display_name, password_hash, role, status, created_at, updated_at, password_changed_at)
-      SELECT ?, ?, ?, ?, 'root', 'active', ?, ?, ?
-      WHERE NOT EXISTS (SELECT 1 FROM accounts WHERE role = 'root')`)
-      .bind(accountId, normalizeEmail(parsed.data.email), parsed.data.displayName, await hashPassword(parsed.data.password, passwordPepper()), now, now, now).run();
-    if (created.meta.changes !== 1) throw new ApiError(409, "ARGUS was configured by another request.", "ALREADY_CONFIGURED");
+    try {
+      await getDb().prepare(`INSERT INTO accounts
+        (id, email, display_name, password_hash, role, status, created_at, updated_at, password_changed_at)
+        VALUES (?, ?, ?, ?, 'root', 'active', ?, ?, ?)`)
+        .bind(accountId, normalizeEmail(parsed.data.email), parsed.data.displayName, await hashPassword(parsed.data.password, passwordPepper()), now, now, now).run();
+    } catch (error) {
+      if (String(error).toLowerCase().includes("unique")) {
+        throw new ApiError(409, "ARGUS was configured by another request.", "ALREADY_CONFIGURED");
+      }
+      throw error;
+    }
     await audit(request, "root.created", "account", accountId, accountId, { email: normalizeEmail(parsed.data.email) });
     const session = await createSession(accountId, request);
     return Response.json({ ok: true }, {
