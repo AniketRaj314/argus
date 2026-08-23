@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import {
   Activity, ArrowDownRight, ArrowUpRight, BarChart3, Check, ChevronDown,
   CircleDollarSign, Copy, Eye, EyeOff, FileClock, Gauge, KeyRound, Layers3, LoaderCircle,
@@ -185,7 +186,7 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
     <div className={tab === "overview" && loading ? "shell-progress visible" : "shell-progress"} role="progressbar" aria-label="Loading ARGUS data" aria-hidden={tab !== "overview" || !loading}><span /></div>
     <header className="topbar">
       <button className="mobile-menu icon-button" aria-label="Open navigation" onClick={() => setMobileNav((value) => !value)}><Menu size={20} /></button>
-      <div className="wordmark"><ArgusMark /><span>ARGUS</span><small>API USAGE INTELLIGENCE</small></div>
+      <div className="wordmark"><Link href="/" className="home-mark" aria-label="Go to ARGUS home"><ArgusMark /></Link><span>ARGUS</span><small>API USAGE INTELLIGENCE</small></div>
       <nav className={mobileNav ? "main-nav open" : "main-nav"} aria-label="Main navigation">
         {nav.map((item) => <button key={item.id} className={tab === item.id ? "active" : ""} onClick={() => { setTab(item.id); setMobileNav(false); }}>{item.icon}<span>{item.label}</span></button>)}
       </nav>

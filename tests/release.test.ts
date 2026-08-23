@@ -15,4 +15,5 @@ test("password visibility uses an explicit switch instead of a native checkbox",
   const app = await readFile(new URL("../app/components/ArgusApp.tsx", import.meta.url), "utf8");
   assert.match(app, /className="show-passwords" role="switch" aria-checked=/);
   assert.doesNotMatch(app, /className="show-passwords"><input type="checkbox"/);
+  assert.match(app, /href="\/" className="home-mark" aria-label="Go to ARGUS home"/);
 });
