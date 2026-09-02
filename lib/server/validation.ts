@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-const password = z.string()
+export const passwordSchema = z.string()
   .min(12, "Use at least 12 characters.")
   .max(128, "Password is too long.")
   .refine((value) => /[a-z]/.test(value) && /[A-Z]/.test(value) && /\d/.test(value), {
@@ -14,7 +14,7 @@ export const loginSchema = z.object({
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1).max(128),
-  newPassword: password,
+  newPassword: passwordSchema,
   confirmPassword: z.string().min(1).max(128),
 }).refine((value) => value.newPassword === value.confirmPassword, {
   message: "New password confirmation does not match.",
@@ -24,14 +24,14 @@ export const changePasswordSchema = z.object({
 export const setupSchema = z.object({
   email: z.string().email().max(254),
   displayName: z.string().trim().min(2).max(80),
-  password,
+  password: passwordSchema,
   setupToken: z.string().min(1).max(256),
 });
 
 export const createAccountSchema = z.object({
   email: z.string().email().max(254),
   displayName: z.string().trim().min(2).max(80),
-  password,
+  password: passwordSchema,
   role: z.enum(["user", "root"]).default("user"),
   apiKeyIds: z.array(z.string().min(5).max(128)).max(250).default([]),
   creditLimitCents: z.number().int().min(100, "The total limit must be at least $1.00.").max(100_000_000, "The total limit cannot exceed $1,000,000.").nullable().default(null),
@@ -41,7 +41,7 @@ export const updateAccountSchema = z.object({
   displayName: z.string().trim().min(2).max(80).optional(),
   email: z.string().email().max(254).optional(),
   status: z.enum(["active", "disabled"]).optional(),
-  password: password.optional(),
+  password: passwordSchema.optional(),
   creditLimitCents: z.number().int().min(100, "The total limit must be at least $1.00.").max(100_000_000, "The total limit cannot exceed $1,000,000.").nullable().optional(),
 }).refine((value) => Object.keys(value).length > 0, "No changes supplied.");
 

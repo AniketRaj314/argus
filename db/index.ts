@@ -131,6 +131,7 @@ async function initializeSchema() {
       updated_at INTEGER NOT NULL,
       last_login_at INTEGER,
       password_changed_at INTEGER NOT NULL,
+      must_change_password INTEGER NOT NULL DEFAULT 0,
       monthly_budget_cents INTEGER,
       credit_limit_cents INTEGER,
       deleted_at INTEGER
@@ -181,6 +182,7 @@ async function initializeSchema() {
     db.prepare("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS deleted_at INTEGER"),
     db.prepare("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS monthly_budget_cents INTEGER"),
     db.prepare("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS credit_limit_cents INTEGER"),
+    db.prepare("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS must_change_password INTEGER NOT NULL DEFAULT 0"),
     db.prepare("UPDATE accounts SET credit_limit_cents = monthly_budget_cents WHERE credit_limit_cents IS NULL AND monthly_budget_cents IS NOT NULL"),
     db.prepare(`DO $$ BEGIN
       IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'accounts_monthly_budget_check') THEN
@@ -214,5 +216,6 @@ export type AccountRow = {
   created_at: number;
   updated_at: number;
   last_login_at: number | null;
+  must_change_password: number;
   credit_limit_cents: number | null;
 };

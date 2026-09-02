@@ -17,6 +17,7 @@ export type SafeAccount = {
   createdAt: number;
   lastLoginAt: number | null;
   creditLimitCents: number | null;
+  mustChangePassword: boolean;
 };
 
 export type AuthSession = {
@@ -39,6 +40,7 @@ function safeAccount(row: AccountRow): SafeAccount {
     createdAt: row.created_at,
     lastLoginAt: row.last_login_at,
     creditLimitCents: row.credit_limit_cents,
+    mustChangePassword: row.must_change_password === 1,
   };
 }
 
@@ -79,7 +81,7 @@ export async function getSession(request: Request): Promise<AuthSession | null> 
   const row = await getDb().prepare(`SELECT
       s.token_hash, s.csrf_hash, s.expires_at, s.last_seen_at,
       a.id, a.email, a.display_name, a.password_hash, a.role, a.status,
-      a.created_at, a.updated_at, a.last_login_at, a.credit_limit_cents
+      a.created_at, a.updated_at, a.last_login_at, a.credit_limit_cents, a.must_change_password
     FROM sessions s
     JOIN accounts a ON a.id = s.account_id
     WHERE s.token_hash = ? AND s.expires_at > ? AND a.status = 'active'`)
@@ -95,6 +97,10 @@ export async function getSession(request: Request): Promise<AuthSession | null> 
 export async function requireSession(request: Request): Promise<AuthSession> {
   const session = await getSession(request);
   if (!session) throw new ApiError(401, "Sign in to continue.", "UNAUTHENTICATED");
+  const pathname = new URL(request.url).pathname;
+  if (session.account.mustChangePassword && pathname !== "/api/auth/password" && pathname !== "/api/auth/logout") {
+    throw new ApiError(403, "Change the temporary password before continuing.", "PASSWORD_CHANGE_REQUIRED");
+  }
   return session;
 }
 

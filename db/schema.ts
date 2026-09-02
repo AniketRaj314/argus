@@ -14,6 +14,7 @@ export const accounts = pgTable(
     updatedAt: integer("updated_at").notNull(),
     lastLoginAt: integer("last_login_at"),
     passwordChangedAt: integer("password_changed_at").notNull(),
+    mustChangePassword: integer("must_change_password").notNull().default(0),
     legacyMonthlyBudgetCents: integer("monthly_budget_cents"),
     creditLimitCents: integer("credit_limit_cents"),
     deletedAt: integer("deleted_at"),

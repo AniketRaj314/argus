@@ -4,11 +4,19 @@ import test from "node:test";
 import packageJson from "../package.json";
 
 test("release version and favicon ship together", async () => {
-  assert.equal(packageJson.version, "1.2.1");
+  assert.equal(packageJson.version, "1.3.0");
   const favicon = await readFile(new URL("../public/favicon.svg", import.meta.url), "utf8");
   assert.match(favicon, /ARGUS watchful eye/);
   assert.match(favicon, /#3EE887/i);
   assert.doesNotMatch(favicon, /#2E9EFF/i);
+});
+
+test("the bulk onboarding control remains local and keeps passwords out of tool payloads", async () => {
+  const server = await readFile(new URL("../scripts/argus-mcp.ts", import.meta.url), "utf8");
+  assert.match(server, /version: "1\.3\.0"/);
+  assert.match(server, /prepare_bulk_accounts/);
+  assert.match(server, /apply_bulk_accounts/);
+  assert.doesNotMatch(server, /inputSchema:\s*\{[^}]*password/i);
 });
 
 test("password visibility uses an explicit switch instead of a native checkbox", async () => {

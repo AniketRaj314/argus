@@ -33,7 +33,7 @@ export async function POST(request: Request) {
     const now = Math.floor(Date.now() / 1000);
     const nextHash = await hashPassword(parsed.data.newPassword, passwordPepper());
     await getDb().batch([
-      getDb().prepare("UPDATE accounts SET password_hash = ?, password_changed_at = ?, updated_at = ? WHERE id = ?")
+      getDb().prepare("UPDATE accounts SET password_hash = ?, password_changed_at = ?, updated_at = ?, must_change_password = 0 WHERE id = ?")
         .bind(nextHash, now, now, session.account.id),
       getDb().prepare("DELETE FROM sessions WHERE account_id = ?").bind(session.account.id),
     ]);

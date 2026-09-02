@@ -16,6 +16,7 @@ The public product page is served at `/`; the authenticated dashboard and first-
 - Optional lifetime per-account credit allocations with consumption, remaining credit, warning, and exceeded states
 - 7-day, 30-day, and all-time spend charts, input/output/cached token totals, request counts, model distribution, service mix, per-key rollups, and recent usage
 - Root account, automatic OpenAI project-key sync, manual tracked-key fallback, assignment, and audit-trail screens
+- Local Codex MCP control for previewed, atomic bulk account provisioning by OpenAI key label
 - Responsive dark navy/teal UI with loading, empty, partial-data, and error states
 - Public, secret-safe `/health` status page and `/api/health` probe with release metadata
 - Server-only OpenAI Usage and Costs integration with cursor pagination and timeouts
@@ -78,10 +79,40 @@ Account credit limits are one-time monitoring allocations denominated in USD and
 | `OPENAI_ADMIN_KEY` | For live data | Server-only organization Admin key used for Usage and Costs requests. |
 | `ARGUS_SETUP_TOKEN` | First run | One-time value required to create the first root account. |
 | `ARGUS_PASSWORD_PEPPER` | Recommended | Independent server-only value mixed into password hashing. Keep it stable after launch. |
+| `ARGUS_BULK_DEFAULT_PASSWORD` | Local MCP only | Shared temporary password for MCP-created accounts. Store it only in the local `.dev.vars`; do not add it to Railway or browser configuration. |
 | `ARGUS_DEMO_MODE` | No | `true` returns deterministic server-generated demo metrics instead of contacting OpenAI. Never enable in production. |
 | `ARGUS_DB_POOL_MAX` | No | Per-instance database connection limit; defaults to 1 on Vercel and 5 elsewhere. |
 
 No ARGUS secret uses a public frontend prefix. The client never reads runtime environment variables.
+
+## Bulk onboarding with Codex
+
+ARGUS includes a local stdio MCP server for onboarding a roster without repetitive admin-screen work. It can refresh OpenAI key labels, list the current safe provisioning context, exactly match each roster row by key label or Key ID, preview the complete operation, and atomically create the accounts, lifetime credit allocations, assignments, and audit records after confirmation.
+
+Add a strong shared temporary password to your local `.dev.vars`:
+
+```dotenv
+ARGUS_BULK_DEFAULT_PASSWORD=replace_with_your_shared_temporary_password
+```
+
+The local MCP process uses the `DATABASE_URL`, `OPENAI_ADMIN_KEY`, and `ARGUS_PASSWORD_PEPPER` already in that file. To manage the deployed ARGUS data, those values must point at the production database and use the same password pepper as production. The bulk password itself is local-only and must not be configured on Railway.
+
+Register the server once:
+
+```bash
+codex mcp add argus -- /bin/zsh -lc 'cd /Users/aniket/Code/argus && npm run mcp'
+```
+
+Restart Codex, then provide a roster containing an email address, the matching OpenAI key label or exact Key ID, and an optional lifetime USD limit. For example: “Sync my ARGUS keys, then prepare accounts for Alice (`alice@example.com`, key `Alice Sharma`, $200) and Bob (`bob@example.com`, key `Bob Singh`, $500).” Codex will show the exact matches and totals before asking permission to create anything.
+
+Safeguards:
+
+- Email addresses and limits are never inferred. Missing values must be supplied.
+- Key-label matching is exact and case-insensitive. Duplicate labels require the exact Key ID.
+- A preview expires after 10 minutes and is fully revalidated immediately before creation.
+- The apply step is one database transaction; it creates every row or none.
+- The temporary password is read only by the local server and is never accepted as tool input, returned, or logged.
+- Every new account must replace the temporary password at first sign-in. Until then, server-side access is restricted to password change and sign-out.
 
 ## OpenAI data flow
 
@@ -110,6 +141,7 @@ Current official references: [Usage API and Costs API example](https://developer
 - State-changing requests require an exact same-origin `Origin`, a custom request header, and a session-bound CSRF token.
 - Login attempts are rate-limited per hashed IP + normalized email. Login responses do not reveal whether an email exists.
 - Disabling an account or changing its password invalidates every existing session.
+- New and root-reset accounts must replace their temporary password before accessing dashboard data.
 - Root authorization and key assignment checks run in each relevant API handler; hidden buttons are never treated as authorization.
 - Audit records exclude fields whose names resemble passwords, tokens, or secrets. Client IPs are hashed before storage.
 - Responses containing account or usage information are marked private and `no-store`.

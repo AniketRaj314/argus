@@ -87,7 +87,7 @@ test("the authenticated ARGUS application is served under /app", async () => {
 test("the browser bundle contains no server credential names or sample secrets", async () => {
   const clientFiles = (await walk(new URL("../.next/static/", import.meta.url))).filter((url) => /\.(?:js|css|html)$/.test(url.pathname));
   const text = (await Promise.all(clientFiles.map((url) => readFile(url, "utf8")))).join("\n");
-  assert.doesNotMatch(text, /OPENAI_ADMIN_KEY|ARGUS_SETUP_TOKEN|ARGUS_PASSWORD_PEPPER|DATABASE_URL|sk-admin_replace_me/);
+  assert.doesNotMatch(text, /OPENAI_ADMIN_KEY|ARGUS_SETUP_TOKEN|ARGUS_PASSWORD_PEPPER|ARGUS_BULK_DEFAULT_PASSWORD|DATABASE_URL|sk-admin_replace_me/);
 });
 
 test("client code does not read runtime environment variables", async () => {
@@ -102,13 +102,13 @@ test("health page and probe expose safe release status", async () => {
   assert.equal(page.status, 200);
   const html = await page.text();
   assert.match(html, /System status/i);
-  assert.match(html, /v(?:<!-- -->)?1\.2\.1/);
+  assert.match(html, /v(?:<!-- -->)?1\.3\.0/);
   assert.doesNotMatch(html, /DATABASE_URL|OPENAI_ADMIN_KEY|ARGUS_PASSWORD_PEPPER|postgresql:\/\//);
 
   const probe = await fetch(`${origin}/api/health`);
   assert.ok([200, 503].includes(probe.status));
   const body = await probe.json();
-  assert.equal(body.version, "1.2.1");
+  assert.equal(body.version, "1.3.0");
   assert.ok(["operational", "degraded"].includes(body.status));
   assert.equal(typeof body.responseTimeMs, "number");
 });

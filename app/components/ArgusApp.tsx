@@ -18,7 +18,7 @@ type Account = {
   id: string; email: string; displayName: string; role: "root" | "user";
   status: "active" | "disabled"; createdAt: number; lastLoginAt: number | null; keyCount?: number;
   creditLimitCents?: number | null; budgetLimitCents?: number | null; budgetSpentCents?: number | null;
-  sharedKeyCount?: number;
+  sharedKeyCount?: number; mustChangePassword?: boolean;
 };
 type TrackedKey = { id: string; keyId: string; label: string; projectId: string | null; status?: "active" | "archived"; assignedNames?: string[]; assignmentCount?: number; createdAt?: number };
 type Bootstrap = { configured: boolean; authenticated: boolean; csrfToken?: string; account?: Account; keys?: TrackedKey[] };
@@ -133,7 +133,7 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
   const [tab, setTab] = useState<Tab>("overview");
   const [mobileNav, setMobileNav] = useState(false);
   const [profileMenu, setProfileMenu] = useState(false);
-  const [passwordOpen, setPasswordOpen] = useState(false);
+  const [passwordOpen, setPasswordOpen] = useState(Boolean(account.mustChangePassword));
   const [range, setRange] = useState<RangeOption>(30);
   const [selectedKey, setSelectedKey] = useState("all");
   const [dashboard, setDashboard] = useState<Dashboard | null>(null);
@@ -215,7 +215,7 @@ function DashboardShell({ initial, onSignedOut }: { initial: Bootstrap; onSigned
       {tab === "accounts" && account.role === "root" && <AdminAccounts csrfToken={csrfToken} onChanged={() => setAdminVersion((value) => value + 1)} />}
       {tab === "audit" && account.role === "root" && <AuditTrail />}
     </main>
-    {passwordOpen && <ChangePasswordModal csrfToken={csrfToken} onClose={() => setPasswordOpen(false)} onChanged={() => { setPasswordOpen(false); onSignedOut(); }} />}
+    {passwordOpen && <ChangePasswordModal csrfToken={csrfToken} forced={Boolean(account.mustChangePassword)} onClose={() => setPasswordOpen(false)} onChanged={() => { setPasswordOpen(false); onSignedOut(); }} />}
   </div>;
 }
 
@@ -436,7 +436,7 @@ function BudgetFields({ enabled, dollars, onEnabled, onDollars }: { enabled: boo
   </fieldset>;
 }
 
-function ChangePasswordModal({ csrfToken, onClose, onChanged }: { csrfToken: string; onClose: () => void; onChanged: () => void }) {
+function ChangePasswordModal({ csrfToken, forced, onClose, onChanged }: { csrfToken: string; forced?: boolean; onClose: () => void; onChanged: () => void }) {
   const [visible, setVisible] = useState(false);
   async function changePassword(values: Record<string, FormDataEntryValue>) {
     const currentPassword = String(values.currentPassword ?? "");
@@ -446,8 +446,8 @@ function ChangePasswordModal({ csrfToken, onClose, onChanged }: { csrfToken: str
     await requestJson("/api/auth/password", { method: "POST", body: JSON.stringify({ currentPassword, newPassword, confirmPassword }) }, csrfToken);
     onChanged();
   }
-  return <FormModal title="Change your password" submitLabel="Change password" onClose={onClose} onSubmit={changePassword}>
-    <p className="modal-subtitle">Enter your current password, then choose a new one. You’ll sign in again when the change is complete.</p>
+  return <FormModal title={forced ? "Choose your password" : "Change your password"} submitLabel="Change password" onClose={forced ? undefined : onClose} onSubmit={changePassword}>
+    <p className="modal-subtitle">{forced ? "Replace the temporary password before entering ARGUS. You’ll sign in again when the change is complete." : "Enter your current password, then choose a new one. You’ll sign in again when the change is complete."}</p>
     <label>Current password<input name="currentPassword" type={visible ? "text" : "password"} autoComplete="current-password" required /></label>
     <label>New password<input name="newPassword" type={visible ? "text" : "password"} autoComplete="new-password" minLength={12} required placeholder="12+ characters" /></label>
     <label>Confirm new password<input name="confirmPassword" type={visible ? "text" : "password"} autoComplete="new-password" minLength={12} required /></label>
@@ -482,15 +482,15 @@ function MemberKeys({ keys, loading }: { keys: Dashboard["keys"]; loading: boole
 
 function ManagementPage({ eyebrow, title, description, action, children }: { eyebrow: string; title: string; description: string; action?: ReactNode; children: ReactNode }) { return <><div className="page-heading management-heading"><div><p className="eyebrow">{eyebrow}</p><h1>{title}</h1><p>{description}</p></div>{action}</div>{children}</>; }
 
-function FormModal({ title, submitLabel, onClose, onSubmit, children }: { title: string; submitLabel: string; onClose: () => void; onSubmit: (values: Record<string, FormDataEntryValue>) => Promise<void>; children: ReactNode }) {
+function FormModal({ title, submitLabel, onClose, onSubmit, children }: { title: string; submitLabel: string; onClose?: () => void; onSubmit: (values: Record<string, FormDataEntryValue>) => Promise<void>; children: ReactNode }) {
   const [busy, setBusy] = useState(false); const [error, setError] = useState("");
   async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setBusy(true); setError(""); try { await onSubmit(Object.fromEntries(new FormData(event.currentTarget))); } catch (reason) { setError(errorMessage(reason)); setBusy(false); } }
-  return <Modal title={title} onClose={onClose}><form className="modal-form" onSubmit={submit}>{children}{error && <div className="form-error">{error}</div>}<div className="modal-actions"><button type="button" className="button secondary" onClick={onClose}>Cancel</button><button className="button primary" disabled={busy}>{busy && <LoaderCircle className="spin" size={16} />}{submitLabel}</button></div></form></Modal>;
+  return <Modal title={title} onClose={onClose}><form className="modal-form" onSubmit={submit}>{children}{error && <div className="form-error">{error}</div>}<div className="modal-actions">{onClose && <button type="button" className="button secondary" onClick={onClose}>Cancel</button>}<button className="button primary" disabled={busy}>{busy && <LoaderCircle className="spin" size={16} />}{submitLabel}</button></div></form></Modal>;
 }
 
-function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
-  useEffect(() => { const escape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); }; window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape); }, [onClose]);
-  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}><section className="modal" role="dialog" aria-modal="true" aria-label={title}><header><div><p className="eyebrow">ARGUS CONTROL</p><h2>{title}</h2></div><button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={19} /></button></header>{children}</section></div>;
+function Modal({ title, onClose, children }: { title: string; onClose?: () => void; children: ReactNode }) {
+  useEffect(() => { if (!onClose) return; const escape = (event: KeyboardEvent) => { if (event.key === "Escape") onClose(); }; window.addEventListener("keydown", escape); return () => window.removeEventListener("keydown", escape); }, [onClose]);
+  return <div className="modal-backdrop" role="presentation" onMouseDown={(event) => { if (onClose && event.target === event.currentTarget) onClose(); }}><section className="modal" role="dialog" aria-modal="true" aria-label={title}><header><div><p className="eyebrow">ARGUS CONTROL</p><h2>{title}</h2></div>{onClose && <button className="icon-button" aria-label="Close dialog" onClick={onClose}><X size={19} /></button>}</header>{children}</section></div>;
 }
 
 function MetricCard({ icon, label, value, delta, sub }: { icon: ReactNode; label: string; value: string; delta?: number; sub?: string }) { return <article className="metric-card"><div className="metric-icon">{icon}</div><div><span>{label}</span><strong>{value}</strong><small className={delta !== undefined ? (delta <= 0 ? "good" : "warn") : ""}>{delta !== undefined ? <>{delta <= 0 ? <ArrowDownRight size={13} /> : <ArrowUpRight size={13} />}{Math.abs(delta).toFixed(1)}%</> : sub}</small></div></article>; }
