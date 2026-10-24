@@ -6,8 +6,8 @@ test("self-service password changes preserve the server-side security boundary",
   const route = await readFile(new URL("../app/api/auth/password/route.ts", import.meta.url), "utf8");
   assert.match(route, /assertSameOrigin\(request\)/);
   assert.match(route, /assertCsrf\(request, session\)/);
-  assert.match(route, /verifyPassword\(parsed\.data\.currentPassword/);
-  assert.match(route, /hashPassword\(parsed\.data\.newPassword/);
+  assert.match(route, /verifyAccountPassword\(parsed\.data\.currentPassword/);
+  assert.match(route, /hashAccountPassword\(parsed\.data\.newPassword/);
   assert.match(route, /must_change_password = 0/);
   assert.match(route, /DELETE FROM sessions WHERE account_id/);
   assert.doesNotMatch(route, /process\.env|NEXT_PUBLIC_|VITE_/);

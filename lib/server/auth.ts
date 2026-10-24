@@ -2,6 +2,7 @@ import "server-only";
 import { ensureSchema, getDb, getRuntimeEnv, type AccountRow } from "../../db";
 import { randomId, randomToken, sha256 } from "./crypto";
 import { ApiError, hashClientIp, parseCookies } from "./security";
+import { csrfTokenForPepper, selectCsrfToken } from "./session-tokens";
 
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const LOGIN_WINDOW_SECONDS = 15 * 60;
@@ -27,7 +28,12 @@ export type AuthSession = {
 };
 
 async function csrfTokenForSession(sessionToken: string): Promise<string> {
-  return sha256(`argus-csrf\u0000${sessionToken}\u0000${getRuntimeEnv().ARGUS_PASSWORD_PEPPER ?? ""}`);
+  return csrfTokenForPepper(sessionToken, getRuntimeEnv().ARGUS_PASSWORD_PEPPER ?? "");
+}
+
+function sessionPeppers() {
+  const env = getRuntimeEnv();
+  return [env.ARGUS_PASSWORD_PEPPER ?? "", ...(env.ARGUS_PASSWORD_PEPPER_PREVIOUS ? [env.ARGUS_PASSWORD_PEPPER_PREVIOUS] : [])];
 }
 
 function safeAccount(row: AccountRow): SafeAccount {
@@ -123,13 +129,15 @@ export async function getCsrfToken(request: Request): Promise<string | null> {
   const token = parseCookies(request).argus_session;
   if (!token) return null;
   const tokenHash = await sha256(token);
-  const row = await getDb().prepare("SELECT 1 AS ok FROM sessions WHERE token_hash = ?").bind(tokenHash).first<{ ok: number }>();
+  const row = await getDb().prepare("SELECT csrf_hash FROM sessions WHERE token_hash = ?").bind(tokenHash).first<{ csrf_hash: string }>();
   if (!row) return null;
   // A stable, session-bound token prevents concurrent bootstrap requests from
   // invalidating one another. Only its hash is persisted in the database.
-  const csrfToken = await csrfTokenForSession(token);
-  await getDb().prepare("UPDATE sessions SET csrf_hash = ? WHERE token_hash = ?").bind(await sha256(csrfToken), tokenHash).run();
-  return csrfToken;
+  const selected = await selectCsrfToken(token, row.csrf_hash, sessionPeppers());
+  if (selected.changed) {
+    await getDb().prepare("UPDATE sessions SET csrf_hash = ? WHERE token_hash = ?").bind(await sha256(selected.token), tokenHash).run();
+  }
+  return selected.token;
 }
 
 export async function deleteSession(request: Request) {
@@ -142,14 +150,24 @@ export async function deleteSession(request: Request) {
 export async function assertLoginAllowed(email: string, request: Request) {
   await ensureSchema();
   const now = Math.floor(Date.now() / 1000);
-  const ipHash = await hashClientIp(request);
-  const key = await sha256(`${ipHash}\u0000${email}`);
-  const row = await getDb().prepare("SELECT attempts, window_started_at, blocked_until FROM rate_limits WHERE key = ?")
-    .bind(key).first<{ attempts: number; window_started_at: number; blocked_until: number | null }>();
-  if (row?.blocked_until && row.blocked_until > now) {
-    throw new ApiError(429, "Too many sign-in attempts. Try again in a few minutes.", "RATE_LIMITED");
+  const candidates = await Promise.all(sessionPeppers().map(async (pepper) => {
+    const ipHash = await hashClientIp(request, pepper);
+    const key = await sha256(`${ipHash}\u0000${email}`);
+    const row = await getDb().prepare("SELECT attempts, window_started_at, blocked_until FROM rate_limits WHERE key = ?")
+      .bind(key).first<{ attempts: number; window_started_at: number; blocked_until: number | null }>();
+    if (row?.blocked_until && row.blocked_until > now) {
+      throw new ApiError(429, "Too many sign-in attempts. Try again in a few minutes.", "RATE_LIMITED");
+    }
+    return { key, row, now };
+  }));
+  // Preserve an existing lockout window instead of resetting it at rotation.
+  let selected = candidates[0];
+  for (const candidate of candidates) {
+    if (candidate.row && now - candidate.row.window_started_at < LOGIN_WINDOW_SECONDS
+      && (!selected.row || now - selected.row.window_started_at >= LOGIN_WINDOW_SECONDS
+        || candidate.row.attempts > selected.row.attempts)) selected = candidate;
   }
-  return { key, row, now };
+  return selected;
 }
 
 export async function recordLoginFailure(key: string, current: Awaited<ReturnType<typeof assertLoginAllowed>>["row"], now: number) {
@@ -196,8 +214,4 @@ export async function getVisibleKeys(account: SafeAccount): Promise<Array<{ id: 
         WHERE aak.account_id = ? AND k.status = 'active' ORDER BY k.label`).bind(account.id)
       .all<{ id: string; key_id: string; label: string; project_id: string | null; created_at: number }>();
   return result.results.map((row) => ({ id: row.id, keyId: row.key_id, label: row.label, projectId: row.project_id, createdAt: row.created_at }));
-}
-
-export function passwordPepper(): string {
-  return getRuntimeEnv().ARGUS_PASSWORD_PEPPER ?? "";
 }

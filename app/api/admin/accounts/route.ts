@@ -1,6 +1,7 @@
 import { ensureSchema, getDb } from "../../../../db";
-import { assertCsrf, audit, passwordPepper, requireRoot } from "../../../../lib/server/auth";
-import { hashPassword, randomId, randomToken } from "../../../../lib/server/crypto";
+import { assertCsrf, audit, requireRoot } from "../../../../lib/server/auth";
+import { randomId, randomToken } from "../../../../lib/server/crypto";
+import { hashAccountPassword } from "../../../../lib/server/passwords";
 import { ApiError, assertJsonRequest, assertSameOrigin, jsonError, noStoreHeaders, normalizeEmail } from "../../../../lib/server/security";
 import { createAccountSchema, updateAccountSchema } from "../../../../lib/server/validation";
 
@@ -62,7 +63,7 @@ export async function POST(request: Request) {
         getDb().prepare(`INSERT INTO accounts
           (id, email, display_name, password_hash, role, status, created_at, updated_at, password_changed_at, must_change_password, credit_limit_cents)
           VALUES (?, ?, ?, ?, ?, 'active', ?, ?, ?, 1, ?)`)
-          .bind(id, normalizeEmail(parsed.data.email), parsed.data.displayName, await hashPassword(parsed.data.password, passwordPepper()), parsed.data.role, now, now, now, parsed.data.creditLimitCents),
+          .bind(id, normalizeEmail(parsed.data.email), parsed.data.displayName, await hashAccountPassword(parsed.data.password), parsed.data.role, now, now, now, parsed.data.creditLimitCents),
         ...requestedKeyIds.map((keyId) => getDb().prepare(`INSERT INTO account_api_keys
           (account_id, api_key_id, assigned_by, assigned_at) VALUES (?, ?, ?, ?)`)
           .bind(id, keyId, root.account.id, now)),
@@ -102,7 +103,7 @@ export async function PATCH(request: Request) {
     if (parsed.data.creditLimitCents !== undefined) { updates.push("credit_limit_cents = ?"); values.push(parsed.data.creditLimitCents); }
     if (parsed.data.password) {
       updates.push("password_hash = ?", "password_changed_at = ?", "must_change_password = 1");
-      values.push(await hashPassword(parsed.data.password, passwordPepper()), Math.floor(Date.now() / 1000));
+      values.push(await hashAccountPassword(parsed.data.password), Math.floor(Date.now() / 1000));
     }
     values.push(body.id);
     try { await getDb().prepare(`UPDATE accounts SET ${updates.join(", ")} WHERE id = ?`).bind(...values).run(); }
@@ -141,7 +142,7 @@ export async function DELETE(request: Request) {
       getDb().prepare("DELETE FROM account_api_keys WHERE account_id = ?").bind(target.id),
       getDb().prepare(`UPDATE accounts SET email = ?, display_name = 'Deleted account', password_hash = ?,
         status = 'disabled', updated_at = ?, password_changed_at = ?, deleted_at = ? WHERE id = ?`)
-        .bind(anonymizedEmail, await hashPassword(randomToken(), passwordPepper()), now, now, now, target.id),
+        .bind(anonymizedEmail, await hashAccountPassword(randomToken()), now, now, now, target.id),
     ]);
     await audit(request, "account.deleted", "account", target.id, root.account.id, { anonymized: true });
     return Response.json({ ok: true }, { headers: noStoreHeaders() });

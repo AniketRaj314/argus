@@ -8,7 +8,8 @@ import {
   type ProvisioningPlan,
   type ProvisioningPlanRow,
 } from "../bulk-provisioning";
-import { hashPassword, randomId } from "./crypto";
+import { randomId } from "./crypto";
+import { hashAccountPassword } from "./passwords";
 import { discoverOpenAIProjectKeys } from "./openai-admin";
 import { normalizeEmail } from "./security";
 import { passwordSchema } from "./validation";
@@ -190,7 +191,7 @@ export async function applyBulkProvisioning(planId: string) {
   const statements = [];
   for (const row of revalidated.rows) {
     const accountId = randomId("acct");
-    const passwordHash = await hashPassword(defaultPassword, pepper);
+    const passwordHash = await hashAccountPassword(defaultPassword);
     statements.push(
       getDb().prepare(`INSERT INTO accounts
         (id, email, display_name, password_hash, role, status, created_at, updated_at, password_changed_at, must_change_password, credit_limit_cents)

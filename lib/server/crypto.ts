@@ -57,10 +57,19 @@ export async function hashPassword(password: string, pepper = ""): Promise<strin
 }
 
 export async function verifyPassword(password: string, encoded: string, pepper = ""): Promise<boolean> {
-  const [algorithm, iterationsText, saltText, expectedText] = encoded.split("$");
+  const parts = encoded.split("$");
+  if (parts.length !== 4) return false;
+  const [algorithm, iterationsText, saltText, expectedText] = parts;
   if (algorithm !== "pbkdf2-sha256" || !iterationsText || !saltText || !expectedText) return false;
   const iterations = Number(iterationsText);
   if (!Number.isInteger(iterations) || iterations < 100_000 || iterations > 1_500_000) return false;
+  let salt: Uint8Array;
+  let expected: Uint8Array;
+  try {
+    salt = base64ToBytes(saltText);
+    expected = base64ToBytes(expectedText);
+  } catch { return false; }
+  if (salt.length !== 16 || expected.length !== 32) return false;
   const key = await crypto.subtle.importKey(
     "raw",
     encoder.encode(`${password}\u0000${pepper}`),
@@ -69,10 +78,9 @@ export async function verifyPassword(password: string, encoded: string, pepper =
     ["deriveBits"],
   );
   const actual = new Uint8Array(await crypto.subtle.deriveBits(
-    { name: "PBKDF2", hash: "SHA-256", salt: base64ToBytes(saltText).buffer as ArrayBuffer, iterations },
+    { name: "PBKDF2", hash: "SHA-256", salt: salt.buffer as ArrayBuffer, iterations },
     key,
     256,
   ));
-  const expected = base64ToBytes(expectedText);
   return constantTimeEqual(bytesToBase64(actual), bytesToBase64(expected));
 }

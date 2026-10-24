@@ -1,9 +1,9 @@
 import { getDb } from "../../../../db";
 import {
-  assertCsrf, assertLoginAllowed, audit, passwordPepper, recordLoginFailure,
+  assertCsrf, assertLoginAllowed, audit, recordLoginFailure,
   recordLoginSuccess, requireSession,
 } from "../../../../lib/server/auth";
-import { hashPassword, verifyPassword } from "../../../../lib/server/crypto";
+import { hashAccountPassword, verifyAccountPassword } from "../../../../lib/server/passwords";
 import { ApiError, assertJsonRequest, assertSameOrigin, jsonError, noStoreHeaders, sessionCookie } from "../../../../lib/server/security";
 import { changePasswordSchema } from "../../../../lib/server/validation";
 
@@ -18,20 +18,20 @@ export async function POST(request: Request) {
     const account = await getDb().prepare("SELECT password_hash FROM accounts WHERE id = ? AND status = 'active' AND deleted_at IS NULL")
       .bind(session.account.id).first<{ password_hash: string }>();
     const currentIsValid = account
-      ? await verifyPassword(parsed.data.currentPassword, account.password_hash, passwordPepper())
+      ? await verifyAccountPassword(parsed.data.currentPassword, account.password_hash)
       : false;
     if (!account || !currentIsValid) {
       await recordLoginFailure(limiter.key, limiter.row, limiter.now);
       await audit(request, "account.password_change_failed", "account", session.account.id, session.account.id);
       throw new ApiError(400, "Current password is incorrect.", "INVALID_CURRENT_PASSWORD");
     }
-    if (await verifyPassword(parsed.data.newPassword, account.password_hash, passwordPepper())) {
+    if (await verifyAccountPassword(parsed.data.newPassword, account.password_hash)) {
       throw new ApiError(400, "Choose a new password that differs from the current password.", "PASSWORD_UNCHANGED");
     }
 
     await recordLoginSuccess(limiter.key);
     const now = Math.floor(Date.now() / 1000);
-    const nextHash = await hashPassword(parsed.data.newPassword, passwordPepper());
+    const nextHash = await hashAccountPassword(parsed.data.newPassword);
     await getDb().batch([
       getDb().prepare("UPDATE accounts SET password_hash = ?, password_changed_at = ?, updated_at = ?, must_change_password = 0 WHERE id = ?")
         .bind(nextHash, now, now, session.account.id),

@@ -78,7 +78,11 @@ Account credit limits are one-time monitoring allocations denominated in USD and
 | `ARGUS_APP_ORIGIN` | Production | Canonical browser-facing origin, such as `https://argus.example.com`. Required when deployed behind a reverse proxy. |
 | `OPENAI_ADMIN_KEY` | For live data | Server-only organization Admin key used for Usage and Costs requests. |
 | `ARGUS_SETUP_TOKEN` | First run | One-time value required to create the first root account. |
-| `ARGUS_PASSWORD_PEPPER` | Recommended | Independent server-only value mixed into password hashing. Keep it stable after launch. |
+| `ARGUS_PASSWORD_PEPPER` | Yes for passwords | Current server-only password pepper. Rotate with the staged procedure below, never by replacing it alone. |
+| `ARGUS_PASSWORD_PEPPER_VERSION` | Defaults to `legacy` | Public label identifying the current pepper, not a secret. |
+| `ARGUS_PASSWORD_PEPPER_PREVIOUS` | During rotation | Previous server-only pepper, retained until dependent passwords are migrated or reset. |
+| `ARGUS_PASSWORD_PEPPER_PREVIOUS_VERSION` | With previous pepper | Version of the previous pepper. Unversioned existing hashes use `legacy`. |
+| `ARGUS_PASSWORD_PEPPER_MIGRATE` | Defaults to `true` | Successful logins upgrade previous-version hashes. Set `false` during compatibility staging to prevent downgrade by older replicas. |
 | `ARGUS_BULK_DEFAULT_PASSWORD` | Local MCP only | Shared temporary password for MCP-created accounts. Store it only in the local `.dev.vars`; do not add it to Railway or browser configuration. |
 | `ARGUS_DEMO_MODE` | No | `true` returns deterministic server-generated demo metrics instead of contacting OpenAI. Never enable in production. |
 | `ARGUS_DB_POOL_MAX` | No | Per-instance database connection limit; defaults to 1 on Vercel and 5 elsewhere. |
@@ -95,7 +99,9 @@ Add a strong shared temporary password to your local `.dev.vars`:
 ARGUS_BULK_DEFAULT_PASSWORD=replace_with_your_shared_temporary_password
 ```
 
-The local MCP process uses the `DATABASE_URL`, `OPENAI_ADMIN_KEY`, and `ARGUS_PASSWORD_PEPPER` already in that file. To manage the deployed ARGUS data, those values must point at the production database and use the same password pepper as production. The bulk password itself is local-only and must not be configured on Railway.
+The local MCP process uses the `DATABASE_URL`, `OPENAI_ADMIN_KEY`, and password-pepper settings already in that file. To manage deployed ARGUS data, use the production database and the same current/previous pepper versions and secrets as production. Restart MCP after changing these settings. The bulk password itself is local-only and must not be configured on Railway.
+
+For staged pepper rotation, inactive-account handling, and the read-only `npm run pepper:status` report, see [Password pepper rotation](docs/pepper-rotation.md).
 
 Register the server once:
 

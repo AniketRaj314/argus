@@ -1,6 +1,6 @@
 import { ensureSchema, getDb, type AccountRow } from "../../../../db";
-import { assertLoginAllowed, audit, createSession, passwordPepper, recordLoginFailure, recordLoginSuccess } from "../../../../lib/server/auth";
-import { verifyPassword } from "../../../../lib/server/crypto";
+import { assertLoginAllowed, audit, createSession, recordLoginFailure, recordLoginSuccess } from "../../../../lib/server/auth";
+import { passwordPeppers, verifyLoginPassword } from "../../../../lib/server/passwords";
 import { ApiError, assertJsonRequest, assertSameOrigin, jsonError, noStoreHeaders, normalizeEmail, sessionCookie } from "../../../../lib/server/security";
 import { loginSchema } from "../../../../lib/server/validation";
 
@@ -13,12 +13,18 @@ export async function POST(request: Request) {
     await ensureSchema();
     const email = normalizeEmail(parsed.data.email);
     const limiter = await assertLoginAllowed(email, request);
-    const account = await getDb().prepare("SELECT * FROM accounts WHERE email = ?").bind(email).first<AccountRow>();
-    const valid = account ? await verifyPassword(parsed.data.password, account.password_hash, passwordPepper()) : false;
-    if (!account || !valid || account.status !== "active") {
+    const account = await getDb().prepare("SELECT * FROM accounts WHERE email = ? AND deleted_at IS NULL").bind(email).first<AccountRow>();
+    const result = account && account.status === "active"
+      ? await verifyLoginPassword(parsed.data.password, account.id, account.password_hash) : null;
+    if (!account || !result?.valid) {
       await recordLoginFailure(limiter.key, limiter.row, limiter.now);
       await audit(request, "auth.login_failed", "account", account?.id ?? null, account?.id ?? null, { email });
       throw new ApiError(401, "Email or password is incorrect.", "INVALID_CREDENTIALS");
+    }
+    if (result.migrated) {
+      await audit(request, "auth.pepper_migrated", "account", account.id, account.id, {
+        fromVersion: result.fromVersion, toVersion: passwordPeppers().current.version,
+      });
     }
     await recordLoginSuccess(limiter.key);
     const session = await createSession(account.id, request);

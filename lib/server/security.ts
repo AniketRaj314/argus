@@ -42,8 +42,7 @@ export function getClientIp(request: Request): string {
     ?? "unknown";
 }
 
-export async function hashClientIp(request: Request): Promise<string> {
-  const pepper = getRuntimeEnv().ARGUS_PASSWORD_PEPPER ?? "";
+export async function hashClientIp(request: Request, pepper = getRuntimeEnv().ARGUS_PASSWORD_PEPPER ?? ""): Promise<string> {
   return sha256(`${getClientIp(request)}\u0000${pepper}`);
 }
 

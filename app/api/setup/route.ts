@@ -1,6 +1,7 @@
 import { ensureSchema, getDb, getRuntimeEnv } from "../../../db";
-import { audit, createSession, isConfigured, passwordPepper } from "../../../lib/server/auth";
-import { constantTimeEqual, hashPassword, randomId, sha256 } from "../../../lib/server/crypto";
+import { audit, createSession, isConfigured } from "../../../lib/server/auth";
+import { constantTimeEqual, randomId, sha256 } from "../../../lib/server/crypto";
+import { hashAccountPassword } from "../../../lib/server/passwords";
 import { ApiError, assertJsonRequest, assertSameOrigin, jsonError, noStoreHeaders, normalizeEmail, sessionCookie } from "../../../lib/server/security";
 import { setupSchema } from "../../../lib/server/validation";
 
@@ -22,7 +23,7 @@ export async function POST(request: Request) {
       await getDb().prepare(`INSERT INTO accounts
         (id, email, display_name, password_hash, role, status, created_at, updated_at, password_changed_at)
         VALUES (?, ?, ?, ?, 'root', 'active', ?, ?, ?)`)
-        .bind(accountId, normalizeEmail(parsed.data.email), parsed.data.displayName, await hashPassword(parsed.data.password, passwordPepper()), now, now, now).run();
+        .bind(accountId, normalizeEmail(parsed.data.email), parsed.data.displayName, await hashAccountPassword(parsed.data.password), now, now, now).run();
     } catch (error) {
       if (String(error).toLowerCase().includes("unique")) {
         throw new ApiError(409, "ARGUS was configured by another request.", "ALREADY_CONFIGURED");
